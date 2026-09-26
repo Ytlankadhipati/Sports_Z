@@ -1,46 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'core/firebase_options.dart';
+import 'features/a1/screens/splash_screen.dart';
 
-void main() {
-  runApp(const SportsZApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(const MyApp());
 }
 
-class SportsZApp extends StatelessWidget {
-  const SportsZApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'SportsZ',
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('SportsZ'),
-        ),
-        body: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.sports_soccer,
-                size: 80,
-              ),
-              SizedBox(height: 20),
-              Text(
-                'SportsZ is Running!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 10),
-              Text(
-                'Ayush ✅',
-                style: TextStyle(fontSize: 16),
-              ),
-            ],
-          ),
-        ),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepOrange),
+        useMaterial3: true,
       ),
+      home: const SplashScreen(),
     );
   }
 }

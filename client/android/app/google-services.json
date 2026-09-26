@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "542925608787",
+    "project_id": "sportsz-ea6f3",
+    "storage_bucket": "sportsz-ea6f3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:542925608787:android:63882b05125e2621e8b3a6",
+        "android_client_info": {
+          "package_name": "com.sportsz.sports_z"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "542925608787-25g78aqgj1ddr9iaiq4fp1j1p8gkkgq4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBIK-En0p8wcOO0dVUuXPNX6zSfrTeV1v8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "542925608787-25g78aqgj1ddr9iaiq4fp1j1p8gkkgq4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "542925608787-1vsqekgto5m813untof5d9cpirj3e10t.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.sportsz.sportsz"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
