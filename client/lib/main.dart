@@ -34,7 +34,7 @@ class SportsZApp extends StatelessWidget {
               ),
               SizedBox(height: 10),
               Text(
-                'Flutter Emulator Test Successful ✅',
+                'Ayush ✅',
                 style: TextStyle(fontSize: 16),
               ),
             ],
