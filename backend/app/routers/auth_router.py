@@ -1,17 +1,24 @@
 from fastapi import APIRouter
-from app.schemas.auth_schema import SignupRequest, LoginRequest, AuthResponse
-from app.services.firebase_auth_service import signup_user, login_user
+from app.schemas.auth_schema import FirebaseTokenRequest, RoleSelectionRequest, AuthResponse
+from app.services.firebase_auth_service import verify_firebase_token, set_user_role
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/signup", response_model=AuthResponse, status_code=201)
-def signup(request: SignupRequest):
-    result = signup_user(request.email, request.password, request.role)
+@router.post("/verify", response_model=AuthResponse)
+def verify_token(request: FirebaseTokenRequest):
+    """
+    Flutter app Firebase se login/signup karne ke baad ye endpoint call karega,
+    Firebase ID token bhej ke — backend apna JWT wapas dega.
+    """
+    result = verify_firebase_token(request.id_token)
     return result
 
 
-@router.post("/login", response_model=AuthResponse)
-def login(request: LoginRequest):
-    result = login_user(request.email, request.password)
+@router.post("/select-role", response_model=AuthResponse)
+def select_role(request: RoleSelectionRequest):
+    """
+    Naye user ke liye role set karta hai (role_selection_screen.dart se call hoga).
+    """
+    result = set_user_role(request.user_id, request.role)
     return result

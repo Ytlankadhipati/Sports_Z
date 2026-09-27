@@ -5,6 +5,7 @@ import 'role_selection_screen.dart';
 import 'email_verification_screen.dart';
 import 'home_screen.dart';
 import 'phone_login_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,6 +49,8 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     if (result == null) {
+
+
       final verified = await _authService.isEmailVerified();
 
       if (!mounted) return;

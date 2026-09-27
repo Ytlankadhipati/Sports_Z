@@ -1,22 +1,19 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Literal
+from pydantic import BaseModel
+from typing import Literal, Optional
 
-# Roles jo doc me define hain
 RoleType = Literal["athlete", "coach", "institute", "recruiter", "admin"]
 
 
-class SignupRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=6)
+class FirebaseTokenRequest(BaseModel):
+    id_token: str
+
+
+class RoleSelectionRequest(BaseModel):
+    user_id: str
     role: RoleType
-
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
 
 
 class AuthResponse(BaseModel):
     token: str
     user_id: str
-    role: str
+    role: Optional[str] = None
