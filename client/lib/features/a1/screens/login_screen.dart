@@ -5,7 +5,6 @@ import 'role_selection_screen.dart';
 import 'email_verification_screen.dart';
 import 'home_screen.dart';
 import 'phone_login_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,6 +30,31 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _goToRoleOrHome(Map<String, dynamic>? backendData) async {
+    if (!mounted) return;
+
+    if (backendData == null) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage =
+        'Server se connect nahi ho paya. Backend chal raha hai check karo.';
+      });
+      return;
+    }
+
+    if (backendData['role'] == null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -44,35 +68,29 @@ class _LoginScreenState extends State<LoginScreen> {
       password: _passwordController.text.trim(),
     );
 
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (result == null) {
-
-
-      final verified = await _authService.isEmailVerified();
-
-      if (!mounted) return;
-
-      if (verified) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const EmailVerificationScreen(),
-          ),
-        );
-      }
-    } else {
+    if (result != null) {
       setState(() {
+        _isLoading = false;
         _errorMessage = result;
       });
+      return;
     }
+
+    final verified = await _authService.isEmailVerified();
+    if (!mounted) return;
+
+    if (!verified) {
+      setState(() => _isLoading = false);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const EmailVerificationScreen()),
+      );
+      return;
+    }
+
+    final backendData = await _authService.verifyWithBackend();
+    setState(() => _isLoading = false);
+    await _goToRoleOrHome(backendData);
   }
 
   Future<void> _handleGoogleSignIn() async {
@@ -83,23 +101,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final result = await _authService.signInWithGoogle();
 
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (result == null) {
-      // Google users ka email hamesha pre-verified hota hai
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
-        );
-      }
-    } else {
+    if (result != null) {
       setState(() {
+        _isLoading = false;
         _errorMessage = result;
       });
+      return;
     }
+
+    final backendData = await _authService.verifyWithBackend();
+    setState(() => _isLoading = false);
+    await _goToRoleOrHome(backendData);
   }
 
   @override
@@ -115,7 +127,6 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 40),
-
                 const Text(
                   'Welcome Back 👋',
                   style: TextStyle(
@@ -129,9 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   'Login to continue your sports journey',
                   style: TextStyle(fontSize: 15, color: Colors.black54),
                 ),
-
                 const SizedBox(height: 40),
-
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -152,9 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -187,7 +194,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -195,22 +201,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: const TextStyle(color: Colors.red, fontSize: 13),
                   ),
                 ],
-
                 const SizedBox(height: 8),
-
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {
-                      // Forgot password — baad me implement karenge
-                    },
+                    onPressed: () {},
                     child: const Text('Forgot Password?'),
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // Login button
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -241,10 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                // OR divider
                 Row(
                   children: [
                     Expanded(child: Divider(color: Colors.grey[300])),
@@ -255,10 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Expanded(child: Divider(color: Colors.grey[300])),
                   ],
                 ),
-
                 const SizedBox(height: 20),
-
-                // Google Sign-In Button
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -277,11 +270,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-
-                const SizedBox(height: 24),
                 const SizedBox(height: 16),
-
-                // Phone Login Button
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -307,8 +296,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-
-                // Signup redirect
+                const SizedBox(height: 24),
                 Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,

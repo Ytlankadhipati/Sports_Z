@@ -1,29 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../services/auth_service.dart';
+import 'home_screen.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
-  final String? fullName;
-  final String? email;
-
-  const RoleSelectionScreen({
-    super.key,
-    this.fullName,
-    this.email,
-  });
+  const RoleSelectionScreen({super.key});
 
   @override
   State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
 }
 
 class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
+  final AuthService _authService = AuthService();
   String? _selectedRole;
   bool _isLoading = false;
+  String? _errorMessage;
 
   final List<Map<String, dynamic>> _roles = [
     {'title': 'Athlete', 'icon': Icons.directions_run, 'value': 'athlete'},
     {'title': 'Coach', 'icon': Icons.sports, 'value': 'coach'},
-    {'title': 'Employer / Recruiter', 'icon': Icons.work_outline, 'value': 'employer'},
+    {'title': 'Recruiter', 'icon': Icons.work_outline, 'value': 'recruiter'},
     {'title': 'Institute', 'icon': Icons.school_outlined, 'value': 'institute'},
   ];
 
@@ -32,40 +27,32 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
 
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'user_id': user.uid,
-          'full_name': widget.fullName ?? (user.displayName ?? 'User'),
-          'email': widget.email ?? (user.email ?? ''),
-          'role': _selectedRole,
-          'created_at': FieldValue.serverTimestamp(),
-          'is_verified': false,
-          'is_active': true,
-        }, SetOptions(merge: true));
-      }
+    final data = await _authService.selectRoleOnBackend(_selectedRole!);
 
-      setState(() {
-        _isLoading = false;
-      });
+    setState(() {
+      _isLoading = false;
+    });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created successfully! 🎉')),
-        );
-      }
-    } catch (e) {
+    if (data == null) {
       setState(() {
-        _isLoading = false;
+        _errorMessage =
+        'Role save nahi hua. Backend chal raha hai check karo.';
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      return;
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Role set successfully! 🎉')),
+      );
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+            (route) => false,
+      );
     }
   }
 
@@ -80,7 +67,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 20),
-
               const Text(
                 'Who Are You? 🤔',
                 style: TextStyle(
@@ -94,9 +80,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                 'Select your role to personalize your experience',
                 style: TextStyle(fontSize: 15, color: Colors.black54),
               ),
-
               const SizedBox(height: 32),
-
               Expanded(
                 child: ListView.builder(
                   itemCount: _roles.length,
@@ -158,7 +142,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   },
                 ),
               ),
-
+              if (_errorMessage != null) ...[
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+              ],
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -192,7 +182,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
             ],
           ),

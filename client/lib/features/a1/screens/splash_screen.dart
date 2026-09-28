@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'onboarding_screen.dart';
 import 'home_screen.dart';
+import 'role_selection_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -23,18 +24,33 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(seconds: 3));
 
     final user = _authService.currentUser;
-
     if (!mounted) return;
 
     if (user != null) {
-      // User already logged in hai — check karo email verified hai ya Google user hai
-      final verified = _authService.isGoogleUser() ||
-          await _authService.isEmailVerified();
-
+      final verified =
+          _authService.isGoogleUser() || await _authService.isEmailVerified();
       if (!mounted) return;
 
       if (verified) {
-        // Seedha Home Screen pe bhej do — dobara login karne ki zarurat nahi
+        final backendData = await _authService.verifyWithBackend();
+        if (!mounted) return;
+
+        if (backendData != null) {
+          if (backendData['role'] == null) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+          }
+          return;
+        }
+        // Backend abhi unreachable hai, lekin Firebase se login toh hai —
+        // fallback: Home pe bhej do
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -43,7 +59,6 @@ class _SplashScreenState extends State<SplashScreen> {
       }
     }
 
-    // User logged in nahi hai, ya verified nahi hai — normal flow
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const OnboardingScreen()),
