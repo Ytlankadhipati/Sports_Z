@@ -22,7 +22,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    // Har 5 second me automatically check karo verify hui ya nahi
     _autoCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _checkVerification(silent: true);
     });
@@ -43,21 +42,40 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     }
 
     final verified = await _authService.isEmailVerified();
-
     if (!mounted) return;
 
-    if (verified) {
-      _autoCheckTimer?.cancel();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
-      );
-    } else if (!silent) {
+    if (!verified) {
+      if (!silent) {
+        setState(() {
+          _isChecking = false;
+          _message = 'Email not verified yet. Please check your inbox.';
+        });
+      }
+      return;
+    }
+
+    _autoCheckTimer?.cancel();
+    setState(() => _isChecking = true);
+
+    final backendData = await _authService.verifyWithBackend();
+    if (!mounted) return;
+
+    if (backendData == null) {
       setState(() {
         _isChecking = false;
-        _message = 'Email not verified yet. Please check your inbox.';
+        _message = 'Server se connect nahi ho paya. Backend chal raha hai check karo.';
       });
+      // dobara retry loop shuru karo
+      _autoCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        _checkVerification(silent: true);
+      });
+      return;
     }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+    );
   }
 
   Future<void> _resendEmail() async {
@@ -70,9 +88,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
     setState(() {
       _isResending = false;
-      _message = result == null
-          ? 'Verification email sent again!'
-          : result;
+      _message = result == null ? 'Verification email sent again!' : result;
     });
   }
 
@@ -125,7 +141,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: Colors.black45),
               ),
-
               if (_message != null) ...[
                 const SizedBox(height: 16),
                 Text(
@@ -139,9 +154,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                 ),
               ],
-
               const SizedBox(height: 32),
-
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -172,16 +185,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               TextButton(
                 onPressed: _isResending ? null : _resendEmail,
                 child: _isResending
                     ? const Text('Sending...')
                     : const Text('Resend Verification Email'),
               ),
-
               TextButton(
                 onPressed: _backToLogin,
                 child: const Text(
