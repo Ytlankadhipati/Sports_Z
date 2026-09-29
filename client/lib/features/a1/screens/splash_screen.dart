@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import 'onboarding_screen.dart';
 import 'home_screen.dart';
@@ -20,6 +21,13 @@ class _SplashScreenState extends State<SplashScreen> {
     _checkLoginStatus();
   }
 
+  void _go(Widget screen) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    );
+  }
+
   Future<void> _checkLoginStatus() async {
     await Future.delayed(const Duration(seconds: 3));
 
@@ -36,64 +44,33 @@ class _SplashScreenState extends State<SplashScreen> {
         if (!mounted) return;
 
         if (backendData != null) {
-          if (backendData['role'] == null) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
-            );
-          } else {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
-            );
-          }
+          _go(backendData['role'] == null
+              ? const RoleSelectionScreen()
+              : const HomeScreen());
           return;
         }
-        // Backend abhi unreachable hai, lekin Firebase se login toh hai —
-        // fallback: Home pe bhej do
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
+        // Backend unreachable, lekin Firebase login hai -> Home
+        _go(const HomeScreen());
         return;
       }
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-    );
+    _go(const OnboardingScreen());
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.deepOrange,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.sports_soccer, size: 100, color: Colors.white),
-            SizedBox(height: 20),
-            Text(
-              'SportsZ',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 2,
-              ),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Every player deserves a stage',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.white70,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF130600),
+        body: SizedBox.expand(
+          child: Image.asset(
+            'assets/images/splash_bg.jpg',
+            fit: BoxFit.cover,
+          ),
         ),
       ),
     );

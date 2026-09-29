@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_theme.dart';
 import '../services/auth_service.dart';
+import '../widgets/sportsz_logo.dart';
+import '../widgets/sportsz_ui.dart';
 import 'home_screen.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
@@ -11,181 +14,243 @@ class RoleSelectionScreen extends StatefulWidget {
 
 class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   final AuthService _authService = AuthService();
-  String? _selectedRole;
+  String? _selectedRole = 'athlete'; // design mein Athlete pehle se selected
   bool _isLoading = false;
   String? _errorMessage;
 
   final List<Map<String, dynamic>> _roles = [
-    {'title': 'Athlete', 'icon': Icons.directions_run, 'value': 'athlete'},
-    {'title': 'Coach', 'icon': Icons.sports, 'value': 'coach'},
-    {'title': 'Recruiter', 'icon': Icons.work_outline, 'value': 'recruiter'},
-    {'title': 'Institute', 'icon': Icons.school_outlined, 'value': 'institute'},
+    {
+      'title': 'Athlete',
+      'desc': 'Track your performance, build\nyour Sports ID and grow.',
+      'icon': Icons.directions_run,
+      'value': 'athlete'
+    },
+    {
+      'title': 'Coach',
+      'desc': 'Discover and evaluate athletes,\nmanage your team.',
+      'icon': Icons.sports,
+      'value': 'coach'
+    },
+    {
+      'title': 'Institute',
+      'desc': 'Manage institute activities\nand talent.',
+      'icon': Icons.account_balance,
+      'value': 'institute'
+    },
+    {
+      'title': 'Recruiter',
+      'desc': 'Find and hire top talent for\nyour team.',
+      'icon': Icons.person_search,
+      'value': 'recruiter'
+    },
   ];
 
   Future<void> _handleContinue() async {
     if (_selectedRole == null) return;
-
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     final data = await _authService.selectRoleOnBackend(_selectedRole!);
-
-    setState(() {
-      _isLoading = false;
-    });
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
     if (data == null) {
-      setState(() {
-        _errorMessage =
-        'Role save nahi hua. Backend chal raha hai check karo.';
-      });
+      setState(() => _errorMessage =
+      'Role save nahi hua. Backend chal raha hai check karo.');
       return;
     }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Role set successfully!')),
+    );
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+    );
+  }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Role set successfully! 🎉')),
-      );
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-            (route) => false,
-      );
-    }
+  Widget _card(Map<String, dynamic> role) {
+    final selected = _selectedRole == role['value'];
+    return GestureDetector(
+      onTap: () => setState(() => _selectedRole = role['value']),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: selected
+              ? const LinearGradient(
+              colors: [Color(0xFFFFF3D6), Color(0xFFFFFAEE)])
+              : null,
+          color: selected ? null : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: selected ? const Color(0xFFD9A62B) : const Color(0xFFF1E6CC),
+              width: selected ? 1.6 : 1),
+          boxShadow: selected
+              ? [
+            BoxShadow(
+                color: const Color(0xFFD9A62B).withValues(alpha: 0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4))
+          ]
+              : null,
+        ),
+        child: Row(children: [
+          Container(
+            height: 56,
+            width: 56,
+            decoration: BoxDecoration(
+              gradient: selected ? kGoldGradient : null,
+              color: selected ? null : const Color(0xFFFBEFD5),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(role['icon'],
+                size: 28, color: selected ? Colors.white : AppColors.gold),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(role['title'],
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(role['desc'],
+                    style: const TextStyle(
+                        fontSize: 13.5, height: 1.3, color: Color(0xFF6B6B6B))),
+              ],
+            ),
+          ),
+          Container(
+            height: 24,
+            width: 24,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: selected ? AppColors.gold : const Color(0xFFBDBDBD),
+                  width: 1.6),
+            ),
+            child: selected
+                ? Center(
+                child: Container(
+                    height: 12,
+                    width: 12,
+                    decoration: const BoxDecoration(
+                        color: AppColors.gold, shape: BoxShape.circle)))
+                : null,
+          ),
+        ]),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              const Text(
-                'Who Are You? 🤔',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Select your role to personalize your experience',
-                style: TextStyle(fontSize: 15, color: Colors.black54),
-              ),
-              const SizedBox(height: 32),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: _roles.length,
-                  itemBuilder: (context, index) {
-                    final role = _roles[index];
-                    final isSelected = _selectedRole == role['value'];
-
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedRole = role['value'];
-                        });
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Colors.deepOrange.withOpacity(0.1)
-                              : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isSelected
-                                ? Colors.deepOrange
-                                : Colors.transparent,
-                            width: 2,
-                          ),
+      body: Stack(
+        children: [
+          const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: HeroImage(asset: 'assets/images/role_bg.png', height: 340)),
+          SingleChildScrollView(
+            child: Column(
+              children: [
+                SizedBox(
+                  height: 270,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Stack(children: [
+                      const Positioned(
+                          top: 16,
+                          left: 22,
+                          child: SportsZLogo(size: 24, showTagline: true)),
+                      Positioned(
+                        top: 12,
+                        right: 8,
+                        child: TextButton(
+                          onPressed: () {},
+                          child: const Text('Skip',
+                              style:
+                              TextStyle(color: Colors.white, fontSize: 16)),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              role['icon'],
-                              size: 32,
-                              color: isSelected
-                                  ? Colors.deepOrange
-                                  : Colors.black54,
-                            ),
-                            const SizedBox(width: 16),
-                            Text(
-                              role['title'],
+                      ),
+                      Positioned(
+                        top: 70,
+                        right: 24,
+                        child: Transform.rotate(
+                          angle: -0.2,
+                          child: const Text('Lead\nSupport\nBuild',
                               style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected
-                                    ? Colors.deepOrange
-                                    : Colors.black87,
+                                  fontFamily: 'cursive',
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 22,
+                                  height: 1.1,
+                                  color: kLogoGold)),
+                        ),
+                      ),
+                      Positioned(
+                        left: 22,
+                        bottom: 44,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            RichText(
+                              text: const TextSpan(
+                                style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white),
+                                children: [
+                                  TextSpan(text: 'Select '),
+                                  TextSpan(
+                                      text: 'Your Role',
+                                      style: TextStyle(color: kLogoGold)),
+                                ],
                               ),
                             ),
-                            const Spacer(),
-                            if (isSelected)
-                              const Icon(
-                                Icons.check_circle,
-                                color: Colors.deepOrange,
-                              ),
+                            const SizedBox(height: 6),
+                            const Text(
+                                'Choose your role to get started\nwith the right experience.',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    height: 1.3)),
                           ],
                         ),
                       ),
-                    );
-                  },
+                    ]),
+                  ),
                 ),
-              ),
-              if (_errorMessage != null) ...[
-                Text(
-                  _errorMessage!,
-                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                WaveSheet(
+                  minHeight: h - 250,
+                  child: Column(children: [
+                    ..._roles.map(_card),
+                    if (_errorMessage != null) ...[
+                      Text(_errorMessage!,
+                          style: const TextStyle(
+                              color: AppColors.error, fontSize: 13)),
+                      const SizedBox(height: 8),
+                    ],
+                    const SizedBox(height: 4),
+                    GoldButton(
+                      label: 'Continue',
+                      loading: _isLoading,
+                      onPressed: _selectedRole == null ? null : _handleContinue,
+                    ),
+                    const SizedBox(height: 12),
+                  ]),
                 ),
-                const SizedBox(height: 8),
               ],
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: (_selectedRole == null || _isLoading)
-                      ? null
-                      : _handleContinue,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange,
-                    disabledBackgroundColor: Colors.grey[300],
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                      : const Text(
-                    'Continue',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
