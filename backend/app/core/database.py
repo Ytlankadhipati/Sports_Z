@@ -7,7 +7,9 @@ load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
 
-client = MongoClient(MONGO_URI)
+import certifi
+
+client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client[MONGO_DB_NAME]
 
 # Collections (A1 ownership: users, athletes, sports_ids)
