@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.modules.identity import auth_router
 
+from app.modules.opportunities import router as opportunities_router
+from app.modules.events import router as events_router
+
 app = FastAPI(title="SportsZ API", version="1.0.0")
 
 app.add_middleware(
@@ -13,6 +16,9 @@ app.add_middleware(
 )
 
 app.include_router(auth_router.router)
+
+app.include_router(opportunities_router.router)
+app.include_router(events_router.router)
 
 
 @app.get("/")
