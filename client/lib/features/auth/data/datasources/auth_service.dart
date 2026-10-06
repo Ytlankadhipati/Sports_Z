@@ -12,7 +12,11 @@ class AuthService {
   // Backend URL — platform ke hisab se badalna:
   // Web (Chrome): http://127.0.0.1:8000
   // Android Emulator: http://10.0.2.2:8000
-  static const String baseUrl = 'http://192.168.31.234:8000';
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://192.168.1.8:8000',
+  );
+  static const Duration _timeout = Duration(seconds: 8);
 
   User? get currentUser => _firebaseAuth.currentUser;
 
@@ -104,7 +108,7 @@ class AuthService {
       if (googleUser == null) return 'Sign in cancelled';
 
       final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
@@ -181,7 +185,7 @@ class AuthService {
         Uri.parse('$baseUrl/auth/verify'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'id_token': idToken}),
-      );
+      ).timeout(_timeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -208,7 +212,7 @@ class AuthService {
         Uri.parse('$baseUrl/auth/select-role'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'user_id': userId, 'role': role}),
-      );
+      ).timeout(_timeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -275,8 +279,8 @@ class AuthService {
   /// (401 aaya), silently Firebase se naya token le ke backend se fresh JWT
   /// leta hai aur request dobara try karta hai — user ko pata bhi nahi chalta.
   Future<http.Response> _authorizedRequest(
-    Future<http.Response> Function(Map<String, String> headers) request,
-  ) async {
+      Future<http.Response> Function(Map<String, String> headers) request,
+      ) async {
     var headers = await _authHeaders();
     var response = await request(headers);
 
@@ -292,17 +296,19 @@ class AuthService {
 
   Future<http.Response> authorizedGet(String path) {
     return _authorizedRequest(
-      (headers) => http.get(Uri.parse('$baseUrl$path'), headers: headers),
+          (headers) => http
+          .get(Uri.parse('$baseUrl$path'), headers: headers)
+          .timeout(_timeout),
     );
   }
 
   Future<http.Response> authorizedPost(String path, Map<String, dynamic> body) {
     return _authorizedRequest(
-      (headers) => http.post(
+          (headers) => http.post(
         Uri.parse('$baseUrl$path'),
         headers: headers,
         body: jsonEncode(body),
-      ),
+      ).timeout(_timeout),
     );
   }
 
@@ -352,7 +358,7 @@ class AuthService {
       if (googleUser == null) return 'Google link cancelled';
 
       final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,

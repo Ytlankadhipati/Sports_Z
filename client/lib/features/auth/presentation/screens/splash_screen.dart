@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -30,17 +31,28 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    await Future.delayed(const Duration(seconds: 3));
+    await Future.delayed(const Duration(milliseconds: 1500));
 
     final user = _authService.currentUser;
     if (!mounted) return;
 
     if (user != null) {
-      final verified =
-          _authService.isGoogleUser() || await _authService.isEmailVerified();
+      final verified = _authService.isGoogleUser() ||
+          user.emailVerified ||
+          await _authService.isEmailVerified();
       if (!mounted) return;
 
       if (verified) {
+        // Role pehle se saved hai -> turant Home, backend refresh background me
+        final storedRole = await _authService.getStoredRole();
+        if (!mounted) return;
+        if (storedRole != null) {
+          unawaited(_authService.verifyWithBackend());
+          _go(const HomeScreen());
+          return;
+        }
+
+        // Role saved nahi -> backend se poochna padega (max 8 sec ka wait)
         final backendData = await _authService.verifyWithBackend();
         if (!mounted) return;
 
