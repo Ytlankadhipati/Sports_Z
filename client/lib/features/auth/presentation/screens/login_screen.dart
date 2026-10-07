@@ -120,9 +120,10 @@ class _LoginScreenState extends State<LoginScreen> {
     child: Text(
       t,
       style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF1B1B1B),
+        fontFamily: AppTypography.fontFamily,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
       ),
     ),
   );
@@ -130,30 +131,34 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _iconBox(IconData icon) => Padding(
     padding: const EdgeInsets.all(8),
     child: Container(
-      width: 40,
+      width: 38,
       decoration: const BoxDecoration(
-        color: Color(0xFFFBEFD5),
+        color: AppColors.lightGold,
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, size: 19, color: AppColors.gold),
+      child: Icon(icon, size: 18, color: AppColors.gold),
     ),
   );
 
   InputDecoration _dec(String hint, IconData icon, {Widget? suffix}) {
     OutlineInputBorder b(Color c) => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: c),
     );
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF8A8A8A), fontSize: 15),
+      hintStyle: const TextStyle(
+        fontFamily: AppTypography.fontFamily,
+        color: AppColors.textMuted,
+        fontSize: 14,
+      ),
       prefixIcon: _iconBox(icon),
       suffixIcon: suffix,
       filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(vertical: 19),
-      border: b(const Color(0xFFF0DDB0)),
-      enabledBorder: b(const Color(0xFFF0DDB0)),
+      fillColor: AppColors.surface,
+      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+      border: b(AppColors.border),
+      enabledBorder: b(AppColors.border),
       focusedBorder: b(AppColors.gold),
       errorBorder: b(AppColors.error),
       focusedErrorBorder: b(AppColors.error),
@@ -353,17 +358,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         OutlinedButton.icon(
                           onPressed: _isLoading ? null : _handleGoogleSignIn,
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            side: const BorderSide(color: Color(0xFFF0DDB0)),
+                            backgroundColor: AppColors.surface,
+                            foregroundColor: AppColors.textPrimary,
+                            side: const BorderSide(color: AppColors.border),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                             ),
+                            minimumSize: const Size.fromHeight(50),
                           ),
                           icon: const _GoogleG(),
                           label: const Text(
                             'Continue with Google',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontFamily: AppTypography.fontFamily,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -377,21 +385,24 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            side: const BorderSide(color: Color(0xFFF0DDB0)),
+                            backgroundColor: AppColors.surface,
+                            foregroundColor: AppColors.textPrimary,
+                            side: const BorderSide(color: AppColors.border),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                             ),
+                            minimumSize: const Size.fromHeight(50),
                           ),
                           icon: const Icon(
                             Icons.smartphone,
                             color: AppColors.gold,
-                            size: 26,
+                            size: 22,
                           ),
                           label: const Text(
                             'Continue with Phone',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontFamily: AppTypography.fontFamily,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

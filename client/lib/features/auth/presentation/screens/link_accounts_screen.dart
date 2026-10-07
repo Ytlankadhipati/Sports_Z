@@ -40,12 +40,12 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Google account linked successfully!'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppColors.success,
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: Colors.redAccent),
+        SnackBar(content: Text(error), backgroundColor: AppColors.error),
       );
     }
   }
@@ -53,16 +53,21 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.surface,
         elevation: 0,
         title: const Text(
           'Linked Accounts',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+            fontFamily: AppTypography.fontFamily,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.textPrimary, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -70,16 +75,21 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           children: [
-            Text(
+            const Text(
               'Manage your sign-in methods. Linking multiple accounts ensures you never lose access to your SportsZ profile.',
-              style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.65), height: 1.4),
+              style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
+                fontSize: 14,
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 24),
             _buildProviderCard(
               title: 'Google',
               subtitle: _authService.currentUser?.email ?? 'Connect your Google account',
               icon: Icons.g_mobiledata,
-              iconColor: Colors.redAccent,
+              iconColor: const Color(0xFFEA4335),
               isLinked: _isLinked('google.com'),
               onLink: _handleLinkGoogle,
             ),
@@ -88,7 +98,7 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
               title: 'Phone Number',
               subtitle: _authService.currentUser?.phoneNumber ?? 'Link phone for SMS OTP verification',
               icon: Icons.phone_android,
-              iconColor: Colors.blueAccent,
+              iconColor: AppColors.gold,
               isLinked: _isLinked('phone'),
               onLink: () {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -101,7 +111,7 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
               title: 'Email & Password',
               subtitle: _authService.currentUser?.email ?? 'Standard email login',
               icon: Icons.email_outlined,
-              iconColor: AppColors.gold,
+              iconColor: AppColors.deepAccent,
               isLinked: _isLinked('password'),
               onLink: null, // Password provider is setup at registration
             ),
@@ -126,11 +136,21 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1B1A17),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isLinked ? AppColors.gold.withOpacity(0.4) : Colors.white.withOpacity(0.08),
+          color: isLinked ? AppColors.gold : AppColors.border,
+          width: isLinked ? 1.4 : 1,
         ),
+        boxShadow: isLinked
+            ? [
+                BoxShadow(
+                  color: AppColors.gold.withValues(alpha: 0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -138,7 +158,7 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.12),
+              color: isLinked ? AppColors.lightGold : AppColors.secondaryBackground,
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: iconColor, size: 26),
@@ -153,9 +173,10 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        fontFamily: AppTypography.fontFamily,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -163,25 +184,30 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.15),
+                          color: const Color(0xFFE8F5E9),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.green.withOpacity(0.5)),
+                          border: Border.all(color: const Color(0xFF81C784)),
                         ),
                         child: const Text(
                           'LINKED',
                           style: TextStyle(
+                            fontFamily: AppTypography.fontFamily,
                             fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.greenAccent,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2E7D32),
                           ),
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6)),
+                  style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -194,16 +220,23 @@ class _LinkAccountsScreenState extends State<LinkAccountsScreen> {
               onPressed: _isLoading ? null : onLink,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.gold,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 minimumSize: Size.zero,
                 elevation: 0,
               ),
-              child: const Text('Link', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Link',
+                style: TextStyle(
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             )
           else if (isLinked)
-            const Icon(Icons.check_circle, color: Colors.greenAccent, size: 22),
+            const Icon(Icons.check_circle, color: AppColors.success, size: 22),
         ],
       ),
     );

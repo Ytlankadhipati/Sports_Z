@@ -5,6 +5,7 @@ import '../../data/datasources/auth_service.dart';
 import '../../../../../shared/widgets/sportsz_logo.dart';
 import '../../../../../shared/widgets/sportsz_ui.dart';
 import 'home_screen.dart';
+import '../../../onboarding/presentation/screens/athlete_identity_screen.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -68,7 +69,11 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
         .showSnackBar(const SnackBar(content: Text('Role set successfully!')));
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(
+        builder: (context) => _selectedRole == 'athlete'
+            ? const AthleteIdentityScreen()
+            : const HomeScreen(),
+      ),
       (route) => false,
     );
   }
@@ -81,23 +86,18 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          gradient: selected
-              ? const LinearGradient(
-                  colors: [Color(0xFFFFF3D6), Color(0xFFFFFAEE)],
-                )
-              : null,
-          color: selected ? null : Colors.white,
+          color: selected ? AppColors.lightGold : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? const Color(0xFFD9A62B) : const Color(0xFFF1E6CC),
-            width: selected ? 1.6 : 1,
+            color: selected ? AppColors.gold : AppColors.border,
+            width: selected ? 1.5 : 1,
           ),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: const Color(0xFFD9A62B).withValues(alpha: 0.25),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    color: AppColors.gold.withValues(alpha: 0.12),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
                 ]
               : null,
@@ -105,58 +105,60 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
         child: Row(
           children: [
             Container(
-              height: 56,
-              width: 56,
+              height: 52,
+              width: 52,
               decoration: BoxDecoration(
-                gradient: selected ? kGoldGradient : null,
-                color: selected ? null : const Color(0xFFFBEFD5),
+                color: selected ? AppColors.gold : AppColors.lightGold,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 role['icon'],
-                size: 28,
+                size: 26,
                 color: selected ? Colors.white : AppColors.gold,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     role['title'],
-                    style: const TextStyle(
-                      fontSize: 18,
+                    style: TextStyle(
+                      fontFamily: AppTypography.fontFamily,
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
+                      color: selected ? AppColors.deepAccent : AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     role['desc'],
                     style: const TextStyle(
-                      fontSize: 13.5,
+                      fontFamily: AppTypography.fontFamily,
+                      fontSize: 13,
                       height: 1.3,
-                      color: Color(0xFF6B6B6B),
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
             Container(
-              height: 24,
-              width: 24,
+              height: 22,
+              width: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: selected ? AppColors.gold : const Color(0xFFBDBDBD),
+                  color: selected ? AppColors.gold : AppColors.border,
                   width: 1.6,
                 ),
               ),
               child: selected
                   ? Center(
                       child: Container(
-                        height: 12,
-                        width: 12,
+                        height: 10,
+                        width: 10,
                         decoration: const BoxDecoration(
                           color: AppColors.gold,
                           shape: BoxShape.circle,

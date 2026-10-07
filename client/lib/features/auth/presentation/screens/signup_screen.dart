@@ -49,7 +49,6 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = false);
 
     if (result == null) {
-      // Success - verification email bhej diya
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -67,16 +66,22 @@ class _SignupScreenState extends State<SignupScreen> {
     padding: const EdgeInsets.only(bottom: 6),
     child: Text(
       t,
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+        fontFamily: AppTypography.fontFamily,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+      ),
     ),
   );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           child: Form(
             key: _formKey,
             child: Column(
@@ -84,20 +89,39 @@ class _SignupScreenState extends State<SignupScreen> {
               children: [
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: AppColors.textPrimary,
+                  ),
                   padding: EdgeInsets.zero,
                   alignment: Alignment.centerLeft,
                 ),
-                const Center(child: SportsZLogo(size: 26)),
+                const SizedBox(height: 12),
+                const Center(
+                  child: SportsZLogo(
+                    size: 26,
+                    taglineColor: AppColors.textSecondary,
+                  ),
+                ),
                 const SizedBox(height: 28),
                 const Text(
                   'Create Your Account',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 const Text(
                   'Join the SportsZ community',
-                  style: TextStyle(fontSize: 14, color: AppColors.muted),
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 _label('Full Name'),
@@ -123,8 +147,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     hintText: 'athlete@example.com',
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty)
+                    if (v == null || v.isEmpty) {
                       return 'Please enter your email';
+                    }
                     if (!v.contains('@') || !v.contains('.')) {
                       return 'Please enter a valid email';
                     }
@@ -153,15 +178,16 @@ class _SignupScreenState extends State<SignupScreen> {
                             ? Icons.visibility_off_outlined
                             : Icons.visibility_outlined,
                         size: 20,
-                        color: AppColors.muted,
+                        color: AppColors.textMuted,
                       ),
                       onPressed: () =>
                           setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty)
+                    if (v == null || v.isEmpty) {
                       return 'Please enter a password';
+                    }
                     if (v.length < 6) {
                       return 'Password must be at least 6 characters';
                     }
@@ -173,24 +199,43 @@ class _SignupScreenState extends State<SignupScreen> {
                   Text(
                     _errorMessage!,
                     style: const TextStyle(
+                      fontFamily: AppTypography.fontFamily,
                       color: AppColors.error,
                       fontSize: 13,
                     ),
                   ),
                 ],
                 const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _handleSignup,
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleSignup,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Sign Up',
+                            style: TextStyle(
+                              fontFamily: AppTypography.fontFamily,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        )
-                      : const Text('Sign Up'),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Center(
@@ -199,13 +244,18 @@ class _SignupScreenState extends State<SignupScreen> {
                     children: [
                       const Text(
                         'Already have an account? ',
-                        style: TextStyle(fontSize: 13, color: AppColors.muted),
+                        style: TextStyle(
+                          fontFamily: AppTypography.fontFamily,
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
                         child: const Text(
                           'Login',
                           style: TextStyle(
+                            fontFamily: AppTypography.fontFamily,
                             color: AppColors.gold,
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
