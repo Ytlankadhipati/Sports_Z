@@ -1,15 +1,18 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Literal, Optional
 
-RoleType = Literal["athlete", "coach", "institute", "recruiter", "admin"]
+RoleType = Literal["athlete", "coach", "institute", "recruiter"]
 
 
 class FirebaseTokenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id_token: str
 
 
 class RoleSelectionRequest(BaseModel):
-    user_id: str
+    model_config = ConfigDict(extra="forbid")
+
     role: RoleType
 
 

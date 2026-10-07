@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/theme/app_theme.dart';
+import '../../../../../shared/widgets/sportsz_logo.dart';
 import '../../data/datasources/auth_service.dart';
 import 'role_selection_screen.dart';
 import 'login_screen.dart';
@@ -91,7 +93,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
     setState(() {
       _isResending = false;
-      _message = result == null ? 'Verification email sent again!' : result;
+      _message = result ?? 'Verification email sent again!';
     });
   }
 
@@ -111,49 +113,86 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     final email = _authService.currentUser?.email ?? '';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
+          padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.mark_email_unread_outlined,
-                size: 90,
-                color: Colors.deepOrange,
+              const SportsZLogo(size: 28, taglineColor: AppColors.textSecondary),
+              const SizedBox(height: 40),
+              Container(
+                width: 90,
+                height: 90,
+                decoration: const BoxDecoration(
+                  color: AppColors.lightGold,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.mark_email_unread_outlined,
+                  size: 46,
+                  color: AppColors.gold,
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
               const Text(
                 'Verify Your Email',
                 style: TextStyle(
+                  fontFamily: AppTypography.fontFamily,
                   fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 'We sent a verification link to\n$email',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 15, color: Colors.black54),
+                style: const TextStyle(
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
                 'Click the link in your email, then tap the button below.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.black45),
+                style: TextStyle(
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: 13,
+                  color: AppColors.textMuted,
+                ),
               ),
               if (_message != null) ...[
                 const SizedBox(height: 16),
-                Text(
-                  _message!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
                     color: _message!.contains('sent again')
-                        ? Colors.green
-                        : Colors.red,
-                    fontSize: 13,
+                        ? AppColors.lightGold
+                        : AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _message!.contains('sent again')
+                          ? AppColors.gold
+                          : AppColors.error,
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    _message!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: AppTypography.fontFamily,
+                      color: _message!.contains('sent again')
+                          ? AppColors.deepAccent
+                          : AppColors.error,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -164,7 +203,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 child: ElevatedButton(
                   onPressed: _isChecking ? null : () => _checkVerification(),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange,
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -181,25 +221,36 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                       : const Text(
                           "I've Verified My Email",
                           style: TextStyle(
-                            fontSize: 16,
+                            fontFamily: AppTypography.fontFamily,
+                            fontSize: 15,
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               TextButton(
                 onPressed: _isResending ? null : _resendEmail,
-                child: _isResending
-                    ? const Text('Sending...')
-                    : const Text('Resend Verification Email'),
+                child: Text(
+                  _isResending ? 'Sending...' : 'Resend Verification Email',
+                  style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: 14,
+                    color: AppColors.gold,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               TextButton(
                 onPressed: _backToLogin,
                 child: const Text(
                   'Back to Login',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ],

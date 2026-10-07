@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../shared/theme/app_theme.dart';
+import '../../../../../shared/widgets/sportsz_logo.dart';
 import '../../data/datasources/auth_service.dart';
 import 'role_selection_screen.dart';
 
@@ -53,7 +55,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     });
 
     if (result == null) {
-      // Success — phone number verify ho gaya
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -71,69 +72,102 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               IconButton(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
+                icon: const Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 18,
+                  color: AppColors.textPrimary,
+                ),
                 padding: EdgeInsets.zero,
+                alignment: Alignment.centerLeft,
               ),
-
-              const SizedBox(height: 10),
-
+              const SizedBox(height: 12),
+              const Center(
+                child: SportsZLogo(size: 26, taglineColor: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 32),
               const Text(
-                'Verify OTP 🔐',
+                'Enter Verification Code',
                 style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Enter the code sent to ${widget.phoneNumber}',
-                style: const TextStyle(fontSize: 15, color: Colors.black54),
+                'Sent to ${widget.phoneNumber}',
+                style: const TextStyle(
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
               ),
-
               const SizedBox(height: 32),
-
               TextField(
                 controller: _otpController,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 24, letterSpacing: 8),
+                style: const TextStyle(
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 10,
+                  color: AppColors.textPrimary,
+                ),
                 decoration: InputDecoration(
                   hintText: '------',
+                  hintStyle: const TextStyle(
+                    color: AppColors.textMuted,
+                    letterSpacing: 10,
+                  ),
+                  filled: true,
+                  fillColor: AppColors.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.gold, width: 1.5),
                   ),
                   counterText: '',
                 ),
               ),
-
               if (_errorMessage != null) ...[
                 const SizedBox(height: 12),
                 Text(
                   _errorMessage!,
-                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                  style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: AppColors.error,
+                    fontSize: 13,
+                  ),
                 ),
               ],
-
               const SizedBox(height: 28),
-
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _verifyOTP,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange,
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -150,9 +184,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       : const Text(
                           'Verify & Continue',
                           style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            fontFamily: AppTypography.fontFamily,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                 ),

@@ -30,10 +30,10 @@ class _SessionExpiredScreenState extends State<SessionExpiredScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false, // Cannot go back to authenticated screens
+    return PopScope(
+      canPop: false, // Cannot go back to authenticated screens
       child: Scaffold(
-        backgroundColor: AppColors.darkBackground,
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
@@ -41,28 +41,29 @@ class _SessionExpiredScreenState extends State<SessionExpiredScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Spacer(),
-                const SportsZLogo(size: 28),
+                const SportsZLogo(size: 28, taglineColor: AppColors.textSecondary),
                 const SizedBox(height: 48),
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.amber.withOpacity(0.12),
-                    border: Border.all(color: Colors.amber.withOpacity(0.4), width: 2),
+                    color: AppColors.lightGold,
+                    border: Border.all(color: AppColors.gold.withValues(alpha: 0.35), width: 2),
                   ),
                   child: const Icon(
                     Icons.lock_clock_outlined,
-                    color: Colors.amber,
-                    size: 64,
+                    color: AppColors.gold,
+                    size: 58,
                   ),
                 ),
                 const SizedBox(height: 32),
                 const Text(
                   'Session Expired',
                   style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                     letterSpacing: -0.5,
                   ),
                 ),
@@ -71,33 +72,38 @@ class _SessionExpiredScreenState extends State<SessionExpiredScreen> {
                   widget.reason ??
                       'For your security, your session has timed out or your account was logged in from another device. Please sign in again to continue.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
                     fontSize: 14,
-                    color: Colors.white.withOpacity(0.7),
+                    color: AppColors.textSecondary,
                     height: 1.5,
                   ),
                 ),
                 const Spacer(),
                 SizedBox(
                   width: double.infinity,
-                  height: 54,
+                  height: 50,
                   child: ElevatedButton(
                     onPressed: _isLoggingOut ? null : _handleRelogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.gold,
-                      foregroundColor: Colors.black,
+                      foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,
                     ),
                     child: _isLoggingOut
                         ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.black),
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Text(
                             'Sign In Again',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontFamily: AppTypography.fontFamily,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                   ),
                 ),
