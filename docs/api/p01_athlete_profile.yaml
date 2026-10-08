@@ -1,0 +1,218 @@
+# ============================================================
+# SPORTSZ API CONTRACT — P01 MY PROFILE (ATHLETE)
+# ============================================================
+
+contract:
+  method: GET
+  endpoint: /v1/me/profile/athlete
+  auth: Bearer <Firebase ID Token>
+  authorization: Authenticated Athlete Only (role == 'athlete')
+  owner: M1 (Identity, Profile & Account)
+  screen_id: P01
+
+description: >
+  Retrieves the complete profile overview for the authenticated athlete.
+  This is a read-oriented overview endpoint (/me endpoint) that resolves the
+  current athlete strictly from the verified Firebase authentication token.
+  Client-supplied user IDs are never accepted, preventing BOLA/IDOR vulnerabilities.
+
+request:
+  headers:
+    Authorization:
+      type: string
+      required: true
+      description: "Bearer token containing valid Firebase ID token"
+    X-Request-ID:
+      type: string
+      required: false
+      description: "Optional client trace identifier"
+  query_parameters: none
+  body: none
+
+response:
+  envelope:
+    type: object
+    properties:
+      data:
+        type: object
+        properties:
+          user_id:
+            type: string
+            description: "Internal SportsZ user ID derived from token"
+          sportsz_id:
+            type: string
+            nullable: true
+            description: "Unique, immutable server-generated SportsZ ID from sports_ids collection"
+          full_name:
+            type: string
+            nullable: true
+          date_of_birth:
+            type: string
+            format: date
+            nullable: true
+          gender:
+            type: string
+            nullable: true
+          city:
+            type: string
+            nullable: true
+          region:
+            type: string
+            nullable: true
+          bio:
+            type: string
+            nullable: true
+            maxLength: 500
+          photo_url:
+            type: string
+            nullable: true
+          cover_photo_url:
+            type: string
+            nullable: true
+            description: "Null in M1 schema; reserved for M5 media integration"
+          sports:
+            type: array
+            items:
+              type: object
+              properties:
+                sport_id:
+                  type: string
+                sport_name:
+                  type: string
+                  nullable: true
+                  description: "Resolved from sports master collection"
+                is_primary:
+                  type: boolean
+                positions:
+                  type: array
+                  items:
+                    type: string
+                level:
+                  type: string
+                  nullable: true
+                attributes:
+                  type: object
+          physical:
+            type: object
+            nullable: true
+            properties:
+              height_cm:
+                type: number
+                nullable: true
+              weight_kg:
+                type: number
+                nullable: true
+              dominant_hand:
+                type: string
+                nullable: true
+              measured_at:
+                type: string
+                format: date
+                nullable: true
+          experience:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: string
+                title:
+                  type: string
+                organization_id:
+                  type: string
+                  nullable: true
+                organization_name:
+                  type: string
+                  nullable: true
+                  description: "Resolved from organizations collection"
+                started_year:
+                  type: integer
+                  nullable: true
+                ended_year:
+                  type: integer
+                  nullable: true
+                description:
+                  type: string
+                  nullable: true
+          privacy:
+            type: object
+            nullable: true
+            properties:
+              discoverable:
+                type: boolean
+              contact_policy:
+                type: string
+                nullable: true
+              field_overrides:
+                type: object
+          completion:
+            type: integer
+            minimum: 0
+            maximum: 100
+            description: "Conservative profile section completion score"
+      meta:
+        type: object
+        properties:
+          next_cursor:
+            type: string
+            nullable: true
+          request_id:
+            type: string
+            nullable: true
+
+errors:
+  401_unauthorized:
+    description: "Missing or invalid/expired Firebase authentication token"
+    schema:
+      error:
+        code: AUTH_REQUIRED
+        message: "Authentication required"
+        details: []
+        request_id: string
+  403_forbidden:
+    description: "Authenticated user lacks the required 'athlete' role"
+    schema:
+      error:
+        code: FORBIDDEN
+        message: "Athlete role is required for this resource"
+        details: []
+        request_id: string
+  404_not_found:
+    description: "Authenticated athlete has not initialized their profile record yet"
+    schema:
+      error:
+        code: NOT_FOUND
+        message: "Athlete profile has not been created yet"
+        details: []
+        request_id: string
+  422_unprocessable_entity:
+    description: "Validation failure on incoming request data"
+    schema:
+      error:
+        code: VALIDATION_ERROR
+        message: "Request validation failed"
+        details: array
+        request_id: string
+  500_internal_server_error:
+    description: "Unexpected database or server error safely wrapped"
+    schema:
+      error:
+        code: INTERNAL_SERVER_ERROR
+        message: "An internal server error occurred"
+        details: []
+        request_id: string
+
+collections:
+  primary:
+    - athlete_profiles (M1 owner)
+    - sports_ids (M1 owner)
+  lookup:
+    - sports (M1 owner)
+    - organizations (M1 owner)
+
+dependencies:
+  consumed_for_p01_overview:
+    - M5: Performance summary (/me/performance) - client composed
+    - M5: Achievements summary (/me/achievements) - client composed
+    - M5: Media gallery summary (/me/media) - client composed
+    - M3: Badges summary (/me/badges) - client composed

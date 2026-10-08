@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 const kGoldGradient = LinearGradient(
-  colors: [Color(0xFFA87508), Color(0xFFD9A62B)],
+  colors: [AppColors.gold, Color(0xFFD9A62B)],
 );
 
-/// Full-width hero photo with dark overlay. Asset na ho to gradient dikhega.
+/// Full-width hero photo with subtle overlay.
 class HeroImage extends StatelessWidget {
   final String asset;
   final double height;
@@ -22,15 +23,15 @@ class HeroImage extends StatelessWidget {
             asset,
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
-            errorBuilder: (_, __, ___) => Container(
+            errorBuilder: (context, error, stackTrace) => Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0xFF14202E),
-                    Color(0xFF5D4308),
-                    Color(0xFFB87A10),
+                    Color(0xFF4A3406),
+                    AppColors.deepAccent,
+                    AppColors.gold,
                   ],
                 ),
               ),
@@ -42,9 +43,9 @@ class HeroImage extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.35),
+                  Colors.black.withValues(alpha: 0.25),
                   Colors.transparent,
-                  Colors.black.withValues(alpha: 0.45),
+                  Colors.black.withValues(alpha: 0.35),
                 ],
               ),
             ),
@@ -75,7 +76,7 @@ class _WaveBorder extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final p = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
+      ..strokeWidth = 4
       ..shader = kGoldGradient.createShader(Offset.zero & size);
     final path = Path()
       ..moveTo(0, 46)
@@ -110,13 +111,9 @@ class WaveSheet extends StatelessWidget {
         child: Container(
           width: double.infinity,
           constraints: BoxConstraints(minHeight: minHeight),
-          padding: const EdgeInsets.fromLTRB(24, 62, 24, 16),
+          padding: const EdgeInsets.fromLTRB(24, 56, 24, 20),
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFFFFFFF), Color(0xFFFBF7EE)],
-            ),
+            color: AppColors.background,
           ),
           child: child,
         ),
@@ -125,45 +122,48 @@ class WaveSheet extends StatelessWidget {
   }
 }
 
-/// Gold gradient button with trailing arrow (Login / Continue).
+/// Gold primary button (Height 50px, Radius 12px, White Text).
 class GoldButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+  final IconData? icon;
+
   const GoldButton({
     super.key,
     required this.label,
     this.onPressed,
     this.loading = false,
+    this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
     return Opacity(
-      opacity: onPressed == null && !loading ? 0.5 : 1,
+      opacity: onPressed == null && !loading ? 0.45 : 1,
       child: Container(
-        height: 54,
+        height: 50,
         decoration: BoxDecoration(
-          gradient: kGoldGradient,
-          borderRadius: BorderRadius.circular(14),
+          color: AppColors.gold,
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFBB8610).withValues(alpha: 0.35),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
+              color: AppColors.gold.withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             onTap: loading ? null : onPressed,
             child: Center(
               child: loading
                   ? const SizedBox(
-                      height: 22,
-                      width: 22,
+                      height: 20,
+                      width: 20,
                       child: CircularProgressIndicator(
                         color: Colors.white,
                         strokeWidth: 2,
@@ -175,16 +175,17 @@ class GoldButton extends StatelessWidget {
                         Text(
                           label,
                           style: const TextStyle(
+                            fontFamily: AppTypography.fontFamily,
                             color: Colors.white,
-                            fontSize: 17,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        const Icon(
-                          Icons.arrow_forward,
+                        const SizedBox(width: 8),
+                        Icon(
+                          icon ?? Icons.arrow_forward,
                           color: Colors.white,
-                          size: 20,
+                          size: 18,
                         ),
                       ],
                     ),

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sports_z/core/config/api_config.dart';
 
 import 'dart:convert';
 
@@ -9,13 +10,8 @@ class AuthService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
-  // Backend URL — platform ke hisab se badalna:
-  // Web (Chrome): http://127.0.0.1:8000
-  // Android Emulator: http://10.0.2.2:8000
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://192.168.1.8:8000',
-  );
+  static String get baseUrl => ApiConfig.baseUrl;
+  static String get _apiV1 => '${ApiConfig.baseUrl}/v1';
   static const Duration _timeout = Duration(seconds: 8);
 
   User? get currentUser => _firebaseAuth.currentUser;
@@ -108,7 +104,7 @@ class AuthService {
       if (googleUser == null) return 'Sign in cancelled';
 
       final GoogleSignInAuthentication googleAuth =
-      await googleUser.authentication;
+          await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
@@ -181,11 +177,13 @@ class AuthService {
       if (user == null) return null;
 
       final idToken = await user.getIdToken();
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/verify'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'id_token': idToken}),
-      ).timeout(_timeout);
+      final response = await http
+          .post(
+            Uri.parse('$_apiV1/auth/verify'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'id_token': idToken}),
+          )
+          .timeout(_timeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -205,14 +203,21 @@ class AuthService {
   /// Role Selection screen se backend ko role batata hai.
   Future<Map<String, dynamic>?> selectRoleOnBackend(String role) async {
     try {
-      final userId = await getStoredUserId();
-      if (userId == null) return null;
+      final firebaseUser = _firebaseAuth.currentUser;
+      if (firebaseUser == null) return null;
+      final idToken = await firebaseUser.getIdToken();
+      if (idToken == null) return null;
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/select-role'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'user_id': userId, 'role': role}),
-      ).timeout(_timeout);
+      final response = await http
+          .post(
+            Uri.parse('$_apiV1/auth/select-role'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $idToken',
+            },
+            body: jsonEncode({'role': role}),
+          )
+          .timeout(_timeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -268,7 +273,7 @@ class AuthService {
   // ===================== AUTHORIZED REQUESTS (auto-refresh) =====================
 
   Future<Map<String, String>> _authHeaders() async {
-    final token = await getStoredToken();
+    final token = await _firebaseAuth.currentUser?.getIdToken();
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -279,8 +284,8 @@ class AuthService {
   /// (401 aaya), silently Firebase se naya token le ke backend se fresh JWT
   /// leta hai aur request dobara try karta hai — user ko pata bhi nahi chalta.
   Future<http.Response> _authorizedRequest(
-      Future<http.Response> Function(Map<String, String> headers) request,
-      ) async {
+    Future<http.Response> Function(Map<String, String> headers) request,
+  ) async {
     var headers = await _authHeaders();
     var response = await request(headers);
 
@@ -296,19 +301,48 @@ class AuthService {
 
   Future<http.Response> authorizedGet(String path) {
     return _authorizedRequest(
-          (headers) => http
-          .get(Uri.parse('$baseUrl$path'), headers: headers)
+      (headers) => http
+          .get(Uri.parse('$_apiV1$path'), headers: headers)
           .timeout(_timeout),
     );
   }
 
   Future<http.Response> authorizedPost(String path, Map<String, dynamic> body) {
     return _authorizedRequest(
-          (headers) => http.post(
-        Uri.parse('$baseUrl$path'),
-        headers: headers,
-        body: jsonEncode(body),
-      ).timeout(_timeout),
+      (headers) => http
+          .post(
+            Uri.parse('$_apiV1$path'),
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout),
+    );
+  }
+
+  Future<http.Response> authorizedPut(String path, Map<String, dynamic> body) {
+    return _authorizedRequest(
+      (headers) => http
+          .put(
+            Uri.parse('$_apiV1$path'),
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout),
+    );
+  }
+
+  Future<http.Response> authorizedPatch(
+    String path,
+    Map<String, dynamic> body,
+  ) {
+    return _authorizedRequest(
+      (headers) => http
+          .patch(
+            Uri.parse('$_apiV1$path'),
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout),
     );
   }
 
@@ -317,8 +351,6 @@ class AuthService {
     await _firebaseAuth.signOut();
     await _clearSession();
   }
-
-
 
   // ===================== PASSWORD RESET & ACCOUNT LINKING =====================
 
@@ -358,7 +390,7 @@ class AuthService {
       if (googleUser == null) return 'Google link cancelled';
 
       final GoogleSignInAuthentication googleAuth =
-      await googleUser.authentication;
+          await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
