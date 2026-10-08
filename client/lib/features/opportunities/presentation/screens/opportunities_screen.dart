@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sports_z/features/opportunities/data/datasources/opportunities_api.dart';
 import 'package:sports_z/features/opportunities/data/models/opportunity.dart';
+import 'package:sports_z/features/opportunities/presentation/screens/opportunity_detail_screen.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _bgTop = AppColors.mustard900;
@@ -98,6 +99,17 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen> {
     _load();
   }
 
+  void _openDetail(Opportunity item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OpportunityDetailScreen(
+          publicId: item.publicId,
+          preview: item,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -186,7 +198,8 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen> {
               child: Center(child: CircularProgressIndicator()),
             );
           }
-          return _OpportunityCard(item: _items[i]);
+          final item = _items[i];
+          return _OpportunityCard(item: item, onTap: () => _openDetail(item));
         },
       ),
     );
@@ -345,8 +358,9 @@ class _Tag extends StatelessWidget {
 }
 
 class _OpportunityCard extends StatelessWidget {
-  const _OpportunityCard({required this.item});
+  const _OpportunityCard({required this.item, required this.onTap});
   final Opportunity item;
+  final VoidCallback onTap;
 
   String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
@@ -373,83 +387,87 @@ class _OpportunityCard extends StatelessWidget {
         ? 'Apply by ${formatDate(deadline)}'
         : 'Closed on ${formatDate(deadline)}';
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.mustard500, AppColors.mustard700],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.mustard500, AppColors.mustard700],
+                    ),
+                  ),
+                  child: Icon(_icon(item.sportId), color: Colors.white, size: 26),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${item.organizationName} • ${item.location}',
+                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                      ),
+                    ],
                   ),
                 ),
-                child: Icon(_icon(item.sportId), color: Colors.white, size: 26),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item.organizationName} • ${item.location}',
-                      style: const TextStyle(color: Colors.white60, fontSize: 13),
-                    ),
-                  ],
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                _Tag(text: _cap(item.type), color: AppColors.mustard300),
+                const SizedBox(width: 8),
+                _Tag(
+                  text: open ? 'Open' : 'Closed',
+                  color: open ? _okColor : _badColor,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _Tag(text: _cap(item.type), color: AppColors.mustard300),
-              const SizedBox(width: 8),
-              _Tag(
-                text: open ? 'Open' : 'Closed',
-                color: open ? _okColor : _badColor,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Divider(height: 1, color: Colors.white.withValues(alpha: 0.1)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.schedule, size: 16, color: AppColors.goldBright),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  deadlineText,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Divider(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.schedule, size: 16, color: AppColors.goldBright),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    deadlineText,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
                 ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.white38),
-            ],
-          ),
-        ],
+                const Icon(Icons.chevron_right, color: Colors.white38),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

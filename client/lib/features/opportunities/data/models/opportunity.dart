@@ -46,6 +46,27 @@ class Opportunity {
   );
 }
 
+/// GET /v1/opportunities/{public_id} ka response (OP02).
+/// Summary ke saath description aur eligibility_summary bhi aate hain.
+class OpportunityDetail {
+  final Opportunity summary;
+  final String description;
+  final String eligibilitySummary;
+
+  const OpportunityDetail({
+    required this.summary,
+    required this.description,
+    required this.eligibilitySummary,
+  });
+
+  factory OpportunityDetail.fromJson(Map<String, dynamic> j) =>
+      OpportunityDetail(
+        summary: Opportunity.fromJson(j),
+        description: (j['description'] ?? '') as String,
+        eligibilitySummary: (j['eligibility_summary'] ?? '') as String,
+      );
+}
+
 class OpportunityPage {
   final List<Opportunity> items;
   final String? nextCursor;
