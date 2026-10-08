@@ -1,14 +1,14 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sports_z/core/config/api_config.dart';
 import 'package:sports_z/features/opportunities/data/models/opportunity.dart';
 
 class OpportunitiesApi {
+  /// Firebase ID token (backend ab yahi verify karta hai).
   Future<String> _token() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     if (token == null) throw Exception('Please log in again.');
     return token;
   }
