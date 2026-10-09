@@ -42,6 +42,38 @@ class ProfileRepository:
         )
 
     @staticmethod
+    def replace_sports(
+        user_id: str,
+        sports: list[dict[str, Any]],
+        *,
+        field: str = "sports",
+    ) -> bool:
+        result = athlete_profiles_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {field: sports}},
+        )
+        return result.matched_count == 1
+
+    @staticmethod
+    def set_physical(user_id: str, physical: dict[str, Any]) -> bool:
+        result = athlete_profiles_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"physical": physical}},
+        )
+        return result.matched_count == 1
+
+    @staticmethod
+    def replace_experience(
+        user_id: str,
+        experience: list[dict[str, Any]],
+    ) -> bool:
+        result = athlete_profiles_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"experience": experience}},
+        )
+        return result.matched_count == 1
+
+    @staticmethod
     def add_sportsz_id_if_missing(user_id: str, sportsz_id: str) -> bool:
         from pymongo.errors import DuplicateKeyError
 
@@ -97,6 +129,13 @@ class ProfileRepository:
         )
 
     @staticmethod
+    def get_active_sport_by_id(sport_id: str) -> dict[str, Any] | None:
+        return sports_collection.find_one(
+            {"sport_id": sport_id, "active": {"$ne": False}},
+            {"_id": 0, "sport_id": 1, "name": 1, "config": 1},
+        )
+
+    @staticmethod
     def get_organization_by_id(org_id: str) -> dict[str, Any] | None:
         return organizations_collection.find_one(
             {"public_id": org_id},
@@ -105,4 +144,20 @@ class ProfileRepository:
                 "public_id": 1,
                 "name": 1,
             },
+        )
+
+    @staticmethod
+    def get_active_organization_by_id(org_id: str) -> dict[str, Any] | None:
+        return organizations_collection.find_one(
+            {"public_id": org_id, "active": {"$ne": False}},
+            {"_id": 0, "public_id": 1, "name": 1},
+        )
+
+    @staticmethod
+    def list_organizations() -> list[dict[str, Any]]:
+        return list(
+            organizations_collection.find(
+                {"active": {"$ne": False}},
+                {"_id": 0, "public_id": 1, "name": 1},
+            ).sort("name", 1)
         )

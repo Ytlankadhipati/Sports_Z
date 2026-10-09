@@ -562,3 +562,143 @@ def test_sports_catalog_and_config_use_existing_sports_collection(athlete_fixtur
     assert config.status_code == 200
     assert config.json()["data"]["sport"]["sport_id"] == athlete_fixture["sport_id"]
     assert "_id" not in config.json()["data"]["sport"]
+
+
+def test_edit_hub_profile_routes_use_authenticated_athlete_profile(athlete_fixture):
+    """P05-P07/P15-P16 update only the authenticated athlete's profile."""
+    uid = athlete_fixture["uid"]
+    sport_id = athlete_fixture["sport_id"]
+    org_id = athlete_fixture["org_id"]
+    headers = {"Authorization": "Bearer valid_token"}
+
+    with mock_firebase_auth(uid):
+        sport_update = client.put(
+            f"/v1/me/profile/athlete/sports/{sport_id}",
+            json={"positions": ["Batter"], "level": "Club"},
+            headers=headers,
+        )
+        primary_update = client.post(
+            f"/v1/me/profile/athlete/sports/{sport_id}/primary",
+            headers=headers,
+        )
+        physical_update = client.patch(
+            "/v1/me/profile/athlete/physical",
+            json={"height_cm": 181, "weight_kg": 75, "dominant_hand": "Right"},
+            headers=headers,
+        )
+        organizations = client.get("/v1/organizations", headers=headers)
+        experience_create = client.post(
+            "/v1/me/profile/athlete/experience",
+            json={
+                "title": "Senior Athlete",
+                "organization_id": org_id,
+                "started_year": 2020,
+                "ended_year": 2022,
+                "description": "Regional team",
+            },
+            headers=headers,
+        )
+
+    assert sport_update.status_code == 200
+    assert primary_update.status_code == 200
+    assert primary_update.json()["data"]["sports"][0]["is_primary"] is True
+    assert sport_update.json()["data"]["sports"][0]["positions"] == ["Batter"]
+    assert sport_update.json()["data"]["sports"][0]["level"] == "Club"
+    assert physical_update.status_code == 200
+    assert physical_update.json()["data"]["physical"]["height_cm"] == 181
+    assert organizations.status_code == 200
+    assert {item["public_id"] for item in organizations.json()["data"]["organizations"]} >= {org_id}
+    assert all("_id" not in item for item in organizations.json()["data"]["organizations"])
+    assert experience_create.status_code == 200
+
+    experience_id = experience_create.json()["data"]["experience"][-1]["id"]
+    with mock_firebase_auth(uid):
+        experience_update = client.patch(
+            f"/v1/me/profile/athlete/experience/{experience_id}",
+            json={"title": "Updated Senior Athlete"},
+            headers=headers,
+        )
+        experience_delete = client.delete(
+            f"/v1/me/profile/athlete/experience/{experience_id}",
+            headers=headers,
+        )
+        sport_delete = client.delete(
+            f"/v1/me/profile/athlete/sports/{sport_id}",
+            headers=headers,
+        )
+
+    assert experience_update.status_code == 200
+    assert any(item["title"] == "Updated Senior Athlete" for item in experience_update.json()["data"]["experience"])
+    assert experience_delete.status_code == 200
+    assert all(item["id"] != experience_id for item in experience_delete.json()["data"]["experience"])
+    assert sport_delete.status_code == 200
+    assert all(item["sport_id"] != sport_id for item in sport_delete.json()["data"]["sports"])
+    assert "_id" not in sport_update.json()["data"]
+
+
+def test_i01_returns_backend_identity_projection_without_internal_ids(athlete_fixture):
+    uid = athlete_fixture["uid"]
+    headers = {"Authorization": "Bearer valid_token"}
+    with mock_firebase_auth(uid):
+        response = client.get("/v1/me/sportsz-id", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    data = body["data"]
+    assert data["sportsz_id"] == athlete_fixture["sportsz_id"]
+    assert data["full_name"] == "Arjun Sharma"
+    assert data["primary_sport"] == "Cricket"
+    assert data["positions"] == ["All-Rounder", "Middle-Order Batsman"]
+    assert data["level"] == "State Level"
+    assert "user_id" not in data
+    assert "_id" not in data
+    assert "email" not in data
+    assert "date_of_birth" not in data
+    assert "verification_status" not in data
+    assert body["meta"]["request_id"]
+
+
+def test_i01_requires_athlete_auth_and_does_not_fabricate_missing_id():
+    assert client.get("/v1/me/sportsz-id").status_code == 401
+
+    coach_uid = f"i01_coach_{uuid.uuid4().hex[:10]}"
+    coach = users_collection.insert_one({
+        "firebase_uid": coach_uid,
+        "email": f"{coach_uid}@sportsz.test",
+        "role": "coach",
+    })
+    try:
+        with mock_firebase_auth(coach_uid):
+            forbidden_response = client.get(
+                "/v1/me/sportsz-id",
+                headers={"Authorization": "Bearer valid_token"},
+            )
+        assert forbidden_response.status_code == 403
+        assert forbidden_response.json()["error"]["code"] == "FORBIDDEN"
+    finally:
+        users_collection.delete_one({"_id": coach.inserted_id})
+
+    uid = f"athlete_no_sportsz_id_{uuid.uuid4().hex[:10]}"
+    user_res = users_collection.insert_one({
+        "firebase_uid": uid,
+        "email": f"{uid}@sportsz.test",
+        "role": "athlete",
+    })
+    user_id = str(user_res.inserted_id)
+    athlete_profiles_collection.insert_one({
+        "user_id": user_id,
+        "full_name": "ID Pending Athlete",
+        "sports": [],
+    })
+    try:
+        with mock_firebase_auth(uid):
+            response = client.get(
+                "/v1/me/sportsz-id",
+                headers={"Authorization": "Bearer valid_token"},
+            )
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "NOT_FOUND"
+        assert sports_ids_collection.find_one({"user_id": user_id}) is None
+    finally:
+        athlete_profiles_collection.delete_one({"user_id": user_id})
+        users_collection.delete_one({"_id": user_res.inserted_id})

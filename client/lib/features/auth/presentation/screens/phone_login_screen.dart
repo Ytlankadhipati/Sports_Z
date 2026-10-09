@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sports_z/shared/theme/app_theme.dart';
 import 'package:sports_z/shared/widgets/sz_auth_ui.dart';
 import 'package:sports_z/features/auth/data/datasources/auth_service.dart';
+
+import '../controllers/auth_controller.dart';
 import 'home_screen.dart';
 import 'role_selection_screen.dart';
 
@@ -14,14 +17,14 @@ import 'role_selection_screen.dart';
 // Figma: M1_A05_PhoneOTP  |  "Continue with phone"
 // ─────────────────────────────────────────────────────────────
 
-class PhoneLoginScreen extends StatefulWidget {
+class PhoneLoginScreen extends ConsumerStatefulWidget {
   const PhoneLoginScreen({super.key});
 
   @override
-  State<PhoneLoginScreen> createState() => _PhoneLoginScreenState();
+  ConsumerState<PhoneLoginScreen> createState() => _PhoneLoginScreenState();
 }
 
-class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
+class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   final _phoneCtrl = TextEditingController();
   final _authService = AuthService();
 
@@ -30,10 +33,11 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   String? _error;
   String? _verificationId;
 
-  final List<TextEditingController> _otpCtrl =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _otpFocus =
-      List.generate(6, (_) => FocusNode());
+  final List<TextEditingController> _otpCtrl = List.generate(
+    6,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _otpFocus = List.generate(6, (_) => FocusNode());
 
   int _timerSecs = 0;
   Timer? _timer;
@@ -51,7 +55,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     _timer?.cancel();
     setState(() => _timerSecs = 30);
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
       setState(() => _timerSecs--);
       if (_timerSecs <= 0) t.cancel();
     });
@@ -69,7 +76,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
       setState(() => _error = 'Enter a valid 10-digit number');
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     HapticFeedback.lightImpact();
 
     await _authService.sendOTP(
@@ -85,7 +95,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
       },
       onError: (err) {
         if (!mounted) return;
-        setState(() { _loading = false; _error = err; });
+        setState(() {
+          _loading = false;
+          _error = err;
+        });
       },
       onAutoVerified: () {
         if (!mounted) return;
@@ -101,7 +114,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
       return;
     }
     if (_verificationId == null) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     HapticFeedback.lightImpact();
 
     final err = await _authService.verifyOTP(
@@ -110,19 +126,31 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     );
     if (!mounted) return;
     if (err != null) {
-      setState(() { _loading = false; _error = err; });
+      setState(() {
+        _loading = false;
+        _error = err;
+      });
       return;
     }
     _goHome();
   }
 
   void _goHome() async {
-    final data = await _authService.verifyWithBackend();
+    final data = await ref
+        .read(authControllerProvider.notifier)
+        .verifyWithBackend();
     if (!mounted) return;
+    if (data == null) {
+      setState(() {
+        _loading = false;
+        _error = ref.read(authControllerProvider).errorMessage ?? 'Could not verify your SportsZ account. Check your connection and retry.';
+      });
+      return;
+    }
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (_) => data == null || data['role'] == null
+        builder: (_) => data['role'] == null
             ? const RoleSelectionScreen()
             : const HomeScreen(),
       ),
@@ -141,6 +169,8 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final apiLoading = ref.watch(authControllerProvider).isLoading;
+    final loading = _loading || apiLoading;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -151,7 +181,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
             SzStickyFooter(
               child: SzGoldButton(
                 label: _sent ? 'Verify and continue' : 'Send code',
-                loading: _loading,
+                loading: loading,
                 onPressed: _sent ? _verifyOtp : _sendCode,
               ),
             ),
@@ -335,7 +365,10 @@ class _PhoneField extends StatelessWidget {
                   fontSize: 14,
                 ),
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 13, vertical: 16),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 13,
+                  vertical: 16,
+                ),
                 counterText: '',
               ),
             ),

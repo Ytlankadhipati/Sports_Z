@@ -19,13 +19,19 @@ class _SessionExpiredScreenState extends State<SessionExpiredScreen> {
 
   Future<void> _handleRelogin() async {
     setState(() => _isLoggingOut = true);
-    await _authService.logout();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-      (route) => false,
-    );
+    try {
+      await _authService.logout().timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Always allow the user to reach sign-in after an expired session.
+    } finally {
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    }
   }
 
   @override
@@ -41,14 +47,20 @@ class _SessionExpiredScreenState extends State<SessionExpiredScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Spacer(),
-                const SportsZLogo(size: 28, taglineColor: AppColors.textSecondary),
+                const SportsZLogo(
+                  size: 28,
+                  taglineColor: AppColors.textSecondary,
+                ),
                 const SizedBox(height: 48),
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: AppColors.lightGold,
-                    border: Border.all(color: AppColors.gold.withValues(alpha: 0.35), width: 2),
+                    border: Border.all(
+                      color: AppColors.gold.withValues(alpha: 0.35),
+                      width: 2,
+                    ),
                   ),
                   child: const Icon(
                     Icons.lock_clock_outlined,
@@ -69,8 +81,7 @@ class _SessionExpiredScreenState extends State<SessionExpiredScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  widget.reason ??
-                      'For your security, your session has timed out or your account was logged in from another device. Please sign in again to continue.',
+                  widget.reason ?? 'For your security, your session has timed out or your account was logged in from another device. Please sign in again to continue.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontFamily: AppTypography.fontFamily,
@@ -88,14 +99,19 @@ class _SessionExpiredScreenState extends State<SessionExpiredScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.gold,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       elevation: 0,
                     ),
                     child: _isLoggingOut
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
                         : const Text(
                             'Sign In Again',

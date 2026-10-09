@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PhysicalStats(BaseModel):
@@ -51,6 +51,73 @@ class AthleteSportInput(BaseModel):
     sport_name: str = Field(min_length=1, max_length=80)
     positions: list[str] = Field(default_factory=list, max_length=20)
     level: str | None = Field(default=None, max_length=80)
+
+
+class AthleteSportEditInput(BaseModel):
+    """Client-editable sport detail fields; sport identity comes from path."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    positions: list[str] = Field(default_factory=list, max_length=20)
+    level: str | None = Field(default=None, max_length=80)
+
+
+class AthletePhysicalEditInput(BaseModel):
+    """Editable measurements. measured_at remains server-owned."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    height_cm: float | None = Field(default=None, ge=30, le=300)
+    weight_kg: float | None = Field(default=None, ge=1, le=500)
+    dominant_hand: str | None = None
+
+    @model_validator(mode="after")
+    def require_a_physical_field(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one physical field is required")
+        return self
+
+
+class AthleteExperienceCreateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=1)
+    organization_id: str | None = None
+    started_year: int | None = Field(default=None, ge=1900, le=2100)
+    ended_year: int | None = Field(default=None, ge=1900, le=2100)
+    description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_year_order(self):
+        if (
+            self.started_year is not None
+            and self.ended_year is not None
+            and self.ended_year < self.started_year
+        ):
+            raise ValueError("ended_year must be on or after started_year")
+        return self
+
+
+class AthleteExperiencePatchInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str | None = Field(default=None, min_length=1)
+    organization_id: str | None = None
+    started_year: int | None = Field(default=None, ge=1900, le=2100)
+    ended_year: int | None = Field(default=None, ge=1900, le=2100)
+    description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_patch_fields(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one experience field is required")
+        if (
+            self.started_year is not None
+            and self.ended_year is not None
+            and self.ended_year < self.started_year
+        ):
+            raise ValueError("ended_year must be on or after started_year")
+        return self
 
 
 class AthleteOnboardingProfileInput(BaseModel):

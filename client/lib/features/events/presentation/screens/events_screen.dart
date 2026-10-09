@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sports_z/features/events/data/datasources/events_api.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sports_z/features/events/presentation/controllers/events_controller.dart';
 import 'package:sports_z/features/events/data/models/event.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
@@ -9,38 +10,34 @@ const _bgBottom = Color(0xFF120D02);
 const _okColor = Color(0xFF5CD68A);
 const _badColor = Color(0xFFFF8A80);
 
-class EventsScreen extends StatefulWidget {
+class EventsScreen extends ConsumerStatefulWidget {
   const EventsScreen({super.key});
 
   @override
-  State<EventsScreen> createState() => _EventsScreenState();
+  ConsumerState<EventsScreen> createState() => _EventsScreenState();
 }
 
-class _EventsScreenState extends State<EventsScreen> {
+class _EventsScreenState extends ConsumerState<EventsScreen> {
   static const _filters = <String, String>{
     'upcoming': 'Upcoming',
     'ongoing': 'Ongoing',
     'completed': 'Completed',
   };
 
-  final _api = EventsApi();
   final _scroll = ScrollController();
-  final List<SportEvent> _items = [];
-  String? _cursor;
   String _status = 'upcoming';
-  bool _loading = true;
-  bool _loadingMore = false;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(() {
       if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-        _loadMore();
+        ref.read(eventsControllerProvider.notifier).loadMore(status: _status);
       }
     });
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   @override
@@ -49,55 +46,18 @@ class _EventsScreenState extends State<EventsScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final page = await _api.list(status: _status);
-      if (!mounted) return;
-      setState(() {
-        _items
-          ..clear()
-          ..addAll(page.items);
-        _cursor = page.nextCursor;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (_loading || _loadingMore || _cursor == null) return;
-    setState(() => _loadingMore = true);
-    try {
-      final page = await _api.list(status: _status, cursor: _cursor);
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(page.items);
-        _cursor = page.nextCursor;
-        _loadingMore = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loadingMore = false);
-    }
-  }
+  Future<void> _load() =>
+      ref.read(eventsControllerProvider.notifier).load(status: _status);
 
   void _setStatus(String status) {
     if (status == _status) return;
-    _status = status;
+    setState(() => _status = status);
     _load();
   }
 
   @override
   Widget build(BuildContext context) {
+    final feed = ref.watch(eventsControllerProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -134,7 +94,7 @@ class _EventsScreenState extends State<EventsScreen> {
                   ],
                 ),
               ),
-              Expanded(child: _body()),
+              Expanded(child: _body(feed)),
             ],
           ),
         ),
@@ -142,18 +102,20 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
-  Widget _body() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
+  Widget _body(EventsFeedState feed) {
+    if (feed.isLoading) return const Center(child: CircularProgressIndicator());
+    if (feed.errorMessage != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70)),
+              Text(
+                feed.errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
               const SizedBox(height: 16),
               ElevatedButton(onPressed: _load, child: const Text('Retry')),
             ],
@@ -161,7 +123,7 @@ class _EventsScreenState extends State<EventsScreen> {
         ),
       );
     }
-    if (_items.isEmpty) {
+    if (feed.items.isEmpty) {
       return const Center(
         child: Text('No events found', style: TextStyle(color: Colors.white70)),
       );
@@ -174,16 +136,16 @@ class _EventsScreenState extends State<EventsScreen> {
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        itemCount: _items.length + (_loadingMore ? 1 : 0),
+        itemCount: feed.items.length + (feed.isLoadingMore ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(height: 14),
         itemBuilder: (_, i) {
-          if (i >= _items.length) {
+          if (i >= feed.items.length) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             );
           }
-          return _EventCard(item: _items[i]);
+          return _EventCard(item: feed.items[i]);
         },
       ),
     );
@@ -298,7 +260,9 @@ class _FilterPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? AppColors.gold : Colors.white.withValues(alpha: 0.08),
+          color: selected
+              ? AppColors.gold
+              : Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: selected
@@ -335,7 +299,11 @@ class _Tag extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -346,8 +314,18 @@ class _EventCard extends StatelessWidget {
   final SportEvent item;
 
   static const _months = [
-    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
   ];
 
   String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
@@ -386,27 +364,27 @@ class _EventCard extends StatelessWidget {
                 child: starts == null
                     ? const Icon(Icons.event, color: Colors.white, size: 26)
                     : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${starts.day}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${starts.day}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            _months[starts.month - 1],
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    Text(
-                      _months[starts.month - 1],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -424,14 +402,19 @@ class _EventCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.place_outlined,
-                            size: 15, color: Colors.white60),
+                        const Icon(
+                          Icons.place_outlined,
+                          size: 15,
+                          color: Colors.white60,
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             item.location,
                             style: const TextStyle(
-                                color: Colors.white60, fontSize: 13),
+                              color: Colors.white60,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ],
