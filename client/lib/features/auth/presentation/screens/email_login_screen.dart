@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sports_z/shared/theme/app_theme.dart';
 import 'package:sports_z/shared/widgets/sz_auth_ui.dart';
 import 'package:sports_z/features/auth/data/datasources/auth_service.dart';
+
+import '../controllers/auth_controller.dart';
 import 'home_screen.dart';
 import 'recovery_screen.dart';
 import '../../../onboarding/presentation/screens/onboarding_screen.dart';
@@ -13,14 +16,14 @@ import '../../../onboarding/presentation/screens/onboarding_screen.dart';
 // Figma: M1_A04_EmailForm  |  "Sign in with email"
 // ─────────────────────────────────────────────────────────────
 
-class EmailLoginScreen extends StatefulWidget {
+class EmailLoginScreen extends ConsumerStatefulWidget {
   const EmailLoginScreen({super.key});
 
   @override
-  State<EmailLoginScreen> createState() => _EmailLoginScreenState();
+  ConsumerState<EmailLoginScreen> createState() => _EmailLoginScreenState();
 }
 
-class _EmailLoginScreenState extends State<EmailLoginScreen> {
+class _EmailLoginScreenState extends ConsumerState<EmailLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
@@ -39,7 +42,10 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     HapticFeedback.lightImpact();
 
     final err = await _authService.loginWithEmail(
@@ -48,31 +54,59 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
     );
     if (!mounted) return;
     if (err != null) {
-      setState(() { _loading = false; _error = err; });
+      setState(() {
+        _loading = false;
+        _error = err;
+      });
       return;
     }
 
-    final verified = await _authService.isEmailVerified();
+    bool verified;
+    try {
+      verified = await _authService.isEmailVerified().timeout(
+        const Duration(seconds: 30),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not check your email verification. Check your connection and retry.';
+      });
+      return;
+    }
     if (!mounted) return;
     if (!verified) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Please verify your email first.'),
-        backgroundColor: AppColors.warning,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please verify your email first.'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
       return;
     }
 
-    final backendData = await _authService.verifyWithBackend();
+    final backendData = await ref
+        .read(authControllerProvider.notifier)
+        .verifyWithBackend();
     if (!mounted) return;
     setState(() => _loading = false);
+
+    if (backendData == null) {
+      setState(() {
+        _error = ref.read(authControllerProvider).errorMessage ?? 'Could not verify your SportsZ account. Check your connection and retry.';
+      });
+      return;
+    }
 
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (_) => backendData == null || backendData['role'] == null
+        builder: (_) => backendData['role'] == null
             ? const OnboardingScreen()
             : const HomeScreen(),
       ),
@@ -82,15 +116,14 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final apiLoading = ref.watch(authControllerProvider).isLoading;
+    final loading = _loading || apiLoading;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
-            SzPageHeader(
-              id: 'A04',
-              onBack: () => Navigator.maybePop(context),
-            ),
+            SzPageHeader(id: 'A04', onBack: () => Navigator.maybePop(context)),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -109,7 +142,8 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                         hint: 'name@example.com',
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Please enter your email';
+                          if (v == null || v.trim().isEmpty)
+                            return 'Please enter your email';
                           if (!v.contains('@')) return 'Enter a valid email';
                           return null;
                         },
@@ -128,10 +162,12 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                             size: 18,
                             color: AppColors.textMuted,
                           ),
-                          onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                          onPressed: () =>
+                              setState(() => _obscurePass = !_obscurePass),
                         ),
                         validator: (v) {
-                          if (v == null || v.isEmpty) return 'Please enter your password';
+                          if (v == null || v.isEmpty)
+                            return 'Please enter your password';
                           if (v.length < 6) return 'At least 6 characters';
                           return null;
                         },
@@ -149,7 +185,10 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                           ),
                           style: TextButton.styleFrom(
                             foregroundColor: AppColors.gold,
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 8,
+                            ),
                             textStyle: const TextStyle(
                               fontFamily: AppTypography.fontFamily,
                               fontSize: 12,
@@ -174,7 +213,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                               fontSize: 11,
                             ),
                           ),
-                          child: const Text('Having trouble with your session?'),
+                          child: const Text(
+                            'Having trouble with your session?',
+                          ),
                         ),
                       ),
                     ],
@@ -185,7 +226,7 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
             SzStickyFooter(
               child: SzGoldButton(
                 label: 'Continue',
-                loading: _loading,
+                loading: loading,
                 onPressed: _handleLogin,
               ),
             ),

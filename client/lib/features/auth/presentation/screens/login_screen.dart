@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../shared/theme/app_theme.dart';
 import '../../data/datasources/auth_service.dart';
+import '../controllers/auth_controller.dart';
 import '../../../../../shared/widgets/sportsz_logo.dart';
 import '../../../../../shared/widgets/sportsz_ui.dart';
 import 'signup_screen.dart';
@@ -11,15 +13,14 @@ import 'home_screen.dart';
 import 'phone_login_screen.dart';
 import 'recovery_screen.dart';
 
-
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -41,8 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (backendData == null) {
       setState(() {
         _isLoading = false;
-        _errorMessage =
-            'Server se connect nahi ho paya. Backend chal raha hai check karo.';
+        _errorMessage = ref.read(authControllerProvider).errorMessage ?? 'Could not verify your SportsZ account. Check your connection and retry.';
       });
       return;
     }
@@ -76,7 +76,19 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final verified = await _authService.isEmailVerified();
+    bool verified;
+    try {
+      verified = await _authService.isEmailVerified().timeout(
+        const Duration(seconds: 30),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Could not check your email verification. Check your connection and retry.';
+      });
+      return;
+    }
     if (!mounted) return;
     if (!verified) {
       setState(() => _isLoading = false);
@@ -89,7 +101,9 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final backendData = await _authService.verifyWithBackend();
+    final backendData = await ref
+        .read(authControllerProvider.notifier)
+        .verifyWithBackend();
     if (!mounted) return;
     setState(() => _isLoading = false);
     await _goToRoleOrHome(backendData);
@@ -109,7 +123,9 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       return;
     }
-    final backendData = await _authService.verifyWithBackend();
+    final backendData = await ref
+        .read(authControllerProvider.notifier)
+        .verifyWithBackend();
     if (!mounted) return;
     setState(() => _isLoading = false);
     await _goToRoleOrHome(backendData);
@@ -167,6 +183,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep this screen's controls tied to its own login attempt. A stale
+    // verification started by Splash must not leave the sign-in button locked.
+    final loading = _isLoading;
     final h = MediaQuery.of(context).size.height;
     return Scaffold(
       backgroundColor: Colors.white,
@@ -315,29 +334,29 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                         Align(
-  alignment: Alignment.centerRight,
-  child: TextButton(
-    onPressed: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => RecoveryScreen(
-            initialEmail: _emailController.text.trim(),
-          ),
-        ),
-      );
-    },
-    child: const Text(
-      'Forgot Password?',
-      style: TextStyle(fontSize: 14),
-    ),
-  ),
-),
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => RecoveryScreen(
+                                    initialEmail: _emailController.text.trim(),
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              'Forgot Password?',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ),
+                        ),
 
                         const SizedBox(height: 6),
                         GoldButton(
                           label: 'Login',
-                          loading: _isLoading,
+                          loading: loading,
                           onPressed: _handleLogin,
                         ),
                         const SizedBox(height: 18),
@@ -356,7 +375,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 18),
                         OutlinedButton.icon(
-                          onPressed: _isLoading ? null : _handleGoogleSignIn,
+                          onPressed: loading ? null : _handleGoogleSignIn,
                           style: OutlinedButton.styleFrom(
                             backgroundColor: AppColors.surface,
                             foregroundColor: AppColors.textPrimary,

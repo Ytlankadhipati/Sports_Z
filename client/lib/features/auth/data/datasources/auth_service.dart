@@ -1,25 +1,21 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sports_z/core/config/api_config.dart';
-
-import 'dart:convert';
 
 class AuthService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
-
-  static String get baseUrl => ApiConfig.baseUrl;
-  static String get _apiV1 => '${ApiConfig.baseUrl}/v1';
-  static const Duration _timeout = Duration(seconds: 8);
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: '542925608787-25g78aqgj1ddr9iaiq4fp1j1p8gkkgq4.apps.googleusercontent.com',
+  );
 
   User? get currentUser => _firebaseAuth.currentUser;
 
   Future<bool> isEmailVerified() async {
     User? user = _firebaseAuth.currentUser;
     if (user == null) return false;
-    await user.reload();
+    await user.reload().timeout(const Duration(seconds: 10));
     user = _firebaseAuth.currentUser;
     return user?.emailVerified ?? false;
   }
@@ -35,10 +31,9 @@ class AuthService {
     required String password,
   }) async {
     try {
-      await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      await _firebaseAuth
+          .signInWithEmailAndPassword(email: email, password: password)
+          .timeout(const Duration(seconds: 20));
       return null;
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
@@ -53,6 +48,8 @@ class AuthService {
         default:
           return 'Login failed: ${e.message}';
       }
+    } on TimeoutException {
+      return 'Login timed out. Check your connection and try again.';
     } catch (e) {
       return 'Something went wrong. Please try again.';
     }
@@ -100,20 +97,32 @@ class AuthService {
 
   Future<String?> signInWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      final GoogleSignInAccount? googleUser = await _googleSignIn
+          .signIn()
+          .timeout(const Duration(seconds: 20));
       if (googleUser == null) return 'Sign in cancelled';
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser
+          .authentication
+          .timeout(const Duration(seconds: 10));
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      await _firebaseAuth.signInWithCredential(credential);
+      await _firebaseAuth
+          .signInWithCredential(credential)
+          .timeout(const Duration(seconds: 20));
       return null;
+    } on TimeoutException {
+      return 'Google sign-in timed out. Check your connection and try again.';
     } catch (e) {
+      final errorStr = e.toString();
+      if (errorStr.contains('10') ||
+          errorStr.toLowerCase().contains('developer_error')) {
+        return 'Google Sign-in failed (ApiException: 10): SHA-1 fingerprint is missing in Firebase Console.';
+      }
       return 'Google sign-in failed: $e';
     }
   }
@@ -166,75 +175,10 @@ class AuthService {
     }
   }
 
-  // ===================== BACKEND INTEGRATION (NAYA) =====================
+  Future<String?> getFirebaseIdToken() async =>
+      await _firebaseAuth.currentUser?.getIdToken();
 
-  /// Firebase se ID token leke backend ke /auth/verify ko bhejta hai.
-  /// Backend MongoDB me user find/create karke apna JWT deta hai.
-  /// Success -> {token, user_id, role} return karta hai, warna null.
-  Future<Map<String, dynamic>?> verifyWithBackend() async {
-    try {
-      final user = _firebaseAuth.currentUser;
-      if (user == null) return null;
-
-      final idToken = await user.getIdToken();
-      final response = await http
-          .post(
-            Uri.parse('$_apiV1/auth/verify'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'id_token': idToken}),
-          )
-          .timeout(_timeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        await _saveSession(
-          token: data['token'],
-          userId: data['user_id'],
-          role: data['role'],
-        );
-        return data;
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// Role Selection screen se backend ko role batata hai.
-  Future<Map<String, dynamic>?> selectRoleOnBackend(String role) async {
-    try {
-      final firebaseUser = _firebaseAuth.currentUser;
-      if (firebaseUser == null) return null;
-      final idToken = await firebaseUser.getIdToken();
-      if (idToken == null) return null;
-
-      final response = await http
-          .post(
-            Uri.parse('$_apiV1/auth/select-role'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $idToken',
-            },
-            body: jsonEncode({'role': role}),
-          )
-          .timeout(_timeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        await _saveSession(
-          token: data['token'],
-          userId: data['user_id'],
-          role: data['role'],
-        );
-        return data;
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  Future<void> _saveSession({
+  Future<void> saveBackendSession({
     required String token,
     required String userId,
     String? role,
@@ -249,107 +193,24 @@ class AuthService {
     }
   }
 
-  Future<String?> getStoredToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
-  }
-
-  Future<String?> getStoredUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('backend_user_id');
-  }
-
-  Future<String?> getStoredRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('backend_role');
-  }
-
-  Future<void> _clearSession() async {
+  Future<void> clearBackendSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
     await prefs.remove('backend_user_id');
     await prefs.remove('backend_role');
   }
-  // ===================== AUTHORIZED REQUESTS (auto-refresh) =====================
-
-  Future<Map<String, String>> _authHeaders() async {
-    final token = await _firebaseAuth.currentUser?.getIdToken();
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-  }
-
-  /// Kisi bhi protected GET/POST ko call karta hai. Agar JWT expire ho gaya
-  /// (401 aaya), silently Firebase se naya token le ke backend se fresh JWT
-  /// leta hai aur request dobara try karta hai — user ko pata bhi nahi chalta.
-  Future<http.Response> _authorizedRequest(
-    Future<http.Response> Function(Map<String, String> headers) request,
-  ) async {
-    var headers = await _authHeaders();
-    var response = await request(headers);
-
-    if (response.statusCode == 401) {
-      final refreshed = await verifyWithBackend();
-      if (refreshed != null) {
-        headers = await _authHeaders();
-        response = await request(headers);
-      }
-    }
-    return response;
-  }
-
-  Future<http.Response> authorizedGet(String path) {
-    return _authorizedRequest(
-      (headers) => http
-          .get(Uri.parse('$_apiV1$path'), headers: headers)
-          .timeout(_timeout),
-    );
-  }
-
-  Future<http.Response> authorizedPost(String path, Map<String, dynamic> body) {
-    return _authorizedRequest(
-      (headers) => http
-          .post(
-            Uri.parse('$_apiV1$path'),
-            headers: headers,
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout),
-    );
-  }
-
-  Future<http.Response> authorizedPut(String path, Map<String, dynamic> body) {
-    return _authorizedRequest(
-      (headers) => http
-          .put(
-            Uri.parse('$_apiV1$path'),
-            headers: headers,
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout),
-    );
-  }
-
-  Future<http.Response> authorizedPatch(
-    String path,
-    Map<String, dynamic> body,
-  ) {
-    return _authorizedRequest(
-      (headers) => http
-          .patch(
-            Uri.parse('$_apiV1$path'),
-            headers: headers,
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout),
-    );
-  }
 
   Future<void> logout() async {
-    await _googleSignIn.signOut();
-    await _firebaseAuth.signOut();
-    await _clearSession();
+    try {
+      await _firebaseAuth.signOut().timeout(const Duration(seconds: 5));
+    } finally {
+      await clearBackendSession();
+      try {
+        await _googleSignIn.signOut().timeout(const Duration(seconds: 3));
+      } catch (_) {
+        // Firebase and backend session state are already cleared locally.
+      }
+    }
   }
 
   // ===================== PASSWORD RESET & ACCOUNT LINKING =====================

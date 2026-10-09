@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sports_z/shared/theme/app_theme.dart';
 import 'package:sports_z/shared/widgets/sportsz_logo.dart';
 import 'package:sports_z/features/auth/data/datasources/auth_service.dart';
+
+import '../controllers/auth_controller.dart';
 import 'email_login_screen.dart';
 import 'phone_login_screen.dart';
-import 'link_accounts_screen.dart';
 import 'home_screen.dart';
 import 'role_selection_screen.dart';
 
@@ -15,14 +17,14 @@ import 'role_selection_screen.dart';
 // Figma: M1_A03_AuthChooser  |  "Welcome to SportsZ"
 // ─────────────────────────────────────────────────────────────
 
-class AuthChooserScreen extends StatefulWidget {
+class AuthChooserScreen extends ConsumerStatefulWidget {
   const AuthChooserScreen({super.key});
 
   @override
-  State<AuthChooserScreen> createState() => _AuthChooserScreenState();
+  ConsumerState<AuthChooserScreen> createState() => _AuthChooserScreenState();
 }
 
-class _AuthChooserScreenState extends State<AuthChooserScreen> {
+class _AuthChooserScreenState extends ConsumerState<AuthChooserScreen> {
   bool _googleLoading = false;
   final _authService = AuthService();
 
@@ -32,21 +34,33 @@ class _AuthChooserScreenState extends State<AuthChooserScreen> {
     if (!mounted) return;
     if (error != null) {
       setState(() => _googleLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(error),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
       return;
     }
-    final backendData = await _authService.verifyWithBackend();
+    final backendData = await ref
+        .read(authControllerProvider.notifier)
+        .verifyWithBackend();
     if (!mounted) return;
     setState(() => _googleLoading = false);
     if (backendData == null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const LinkAccountsScreen()),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ref.read(authControllerProvider).errorMessage ??
+                'Could not verify your SportsZ account. Please retry.',
+          ),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -68,10 +82,10 @@ class _AuthChooserScreenState extends State<AuthChooserScreen> {
       PageRouteBuilder(
         pageBuilder: (context, animation, _) => screen,
         transitionsBuilder: (context, animation, _, child) => SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(1, 0),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
           child: child,
         ),
         transitionDuration: const Duration(milliseconds: 350),
@@ -81,6 +95,8 @@ class _AuthChooserScreenState extends State<AuthChooserScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authControllerProvider);
+    final googleLoading = _googleLoading || authState.isLoading;
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -92,8 +108,11 @@ class _AuthChooserScreenState extends State<AuthChooserScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new,
-                        size: 18, color: AppColors.textPrimary),
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new,
+                      size: 18,
+                      color: AppColors.textPrimary,
+                    ),
                     onPressed: () => Navigator.maybePop(context),
                   ),
                 ],
@@ -145,8 +164,8 @@ class _AuthChooserScreenState extends State<AuthChooserScreen> {
                     _AuthOption(
                       icon: null,
                       label: 'Continue with Google',
-                      onTap: _googleLoading ? null : _handleGoogle,
-                      isGoogleLoading: _googleLoading,
+                      onTap: googleLoading ? null : _handleGoogle,
+                      isGoogleLoading: googleLoading,
                     ),
                     const SizedBox(height: 28),
                     const Text(
@@ -224,7 +243,9 @@ class _AuthOptionState extends State<_AuthOption> {
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: AppColors.gold),
+                  strokeWidth: 2,
+                  color: AppColors.gold,
+                ),
               )
             else
               const _GoogleG(),
@@ -240,7 +261,11 @@ class _AuthOptionState extends State<_AuthOption> {
                 ),
               ),
             ),
-            const Icon(Icons.chevron_right, size: 18, color: AppColors.textMuted),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
             const SizedBox(width: 12),
           ],
         ),

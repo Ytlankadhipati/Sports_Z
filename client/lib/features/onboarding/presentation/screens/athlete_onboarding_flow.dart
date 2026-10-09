@@ -1,9 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
-import '../../../auth/data/datasources/auth_service.dart';
+import '../../../profile/presentation/controllers/profile_controller.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../auth/presentation/screens/home_screen.dart';
 import '../../../auth/presentation/screens/login_screen.dart';
 
@@ -25,15 +25,15 @@ enum AthleteOnboardingStep {
   final String title;
 }
 
-class AthleteOnboardingFlow extends StatefulWidget {
+class AthleteOnboardingFlow extends ConsumerStatefulWidget {
   const AthleteOnboardingFlow({super.key});
 
   @override
-  State<AthleteOnboardingFlow> createState() => _AthleteOnboardingFlowState();
+  ConsumerState<AthleteOnboardingFlow> createState() =>
+      _AthleteOnboardingFlowState();
 }
 
-class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
-  final AuthService _api = AuthService();
+class _AthleteOnboardingFlowState extends ConsumerState<AthleteOnboardingFlow> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _city = TextEditingController();
@@ -61,7 +61,9 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
   @override
   void initState() {
     super.initState();
-    _resume();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _resume();
+    });
   }
 
   @override
@@ -76,62 +78,54 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
     super.dispose();
   }
 
-  Map<String, dynamic>? _responseData(http.Response response) {
-    final decoded = jsonDecode(response.body);
-    if (decoded is Map<String, dynamic> &&
-        decoded['data'] is Map<String, dynamic>) {
-      return decoded['data'] as Map<String, dynamic>;
-    }
-    return null;
-  }
-
   Future<void> _resume() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final response = await _api.authorizedGet('/me/profile/athlete');
-      if (response.statusCode == 200) {
-        final data = _responseData(response);
-        if (data != null) {
-          _profile.addAll(data);
-          _name.text = data['full_name'] as String? ?? '';
-          _city.text = data['city'] as String? ?? '';
-          _region.text = data['region'] as String? ?? '';
-          _bio.text = data['bio'] as String? ?? '';
-          final savedGender = (data['gender'] as String?)?.toLowerCase();
-          _gender =
-              const {
-                'female',
-                'male',
-                'non_binary',
-                'prefer_not_to_say',
-              }.contains(savedGender)
-              ? savedGender
-              : null;
-          final physical = data['physical'];
-          if (physical is Map) {
-            _height.text = physical['height_cm']?.toString() ?? '';
-            _weight.text = physical['weight_kg']?.toString() ?? '';
-          }
-          final privacy = data['privacy'];
-          if (privacy is Map) {
-            _discoverable = privacy['discoverable'] as bool? ?? true;
-            _contactPolicy =
-                privacy['contact_policy'] as String? ?? 'connections_only';
-          }
-          final sports = data['sports'];
-          if (sports is List) {
-            for (final item in sports.whereType<Map>()) {
-              final id = item['sport_id']?.toString();
-              if (id != null && id.isNotEmpty) _selectedSports.add(id);
-            }
-          }
-          _step = _resumeAt(data);
+      Map<String, dynamic> data;
+      try {
+        data = await ref.read(profileControllerProvider.notifier).loadProfile();
+      } on DioException catch (error) {
+        if (apiExceptionFrom(error)?.statusCode != 404) rethrow;
+        data = <String, dynamic>{};
+      }
+      if (data.isNotEmpty) {
+        _profile.addAll(data);
+        _name.text = data['full_name'] as String? ?? '';
+        _city.text = data['city'] as String? ?? '';
+        _region.text = data['region'] as String? ?? '';
+        _bio.text = data['bio'] as String? ?? '';
+        final savedGender = (data['gender'] as String?)?.toLowerCase();
+        _gender =
+            const {
+              'female',
+              'male',
+              'non_binary',
+              'prefer_not_to_say',
+            }.contains(savedGender)
+            ? savedGender
+            : null;
+        final physical = data['physical'];
+        if (physical is Map) {
+          _height.text = physical['height_cm']?.toString() ?? '';
+          _weight.text = physical['weight_kg']?.toString() ?? '';
         }
-      } else if (response.statusCode != 404) {
-        throw _safeMessage(response.statusCode);
+        final privacy = data['privacy'];
+        if (privacy is Map) {
+          _discoverable = privacy['discoverable'] as bool? ?? true;
+          _contactPolicy =
+              privacy['contact_policy'] as String? ?? 'connections_only';
+        }
+        final sports = data['sports'];
+        if (sports is List) {
+          for (final item in sports.whereType<Map>()) {
+            final id = item['sport_id']?.toString();
+            if (id != null && id.isNotEmpty) _selectedSports.add(id);
+          }
+        }
+        _step = _resumeAt(data);
       }
       if (mounted) setState(() => _loading = false);
       if (_step == 2) await _loadSports();
@@ -141,7 +135,7 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = e.toString();
+          _error = apiErrorText(e);
         });
       }
     }
@@ -162,20 +156,15 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
     return 7;
   }
 
-  String _safeMessage(int status) => switch (status) {
-    401 => 'Your session expired. Sign in again to continue.',
-    403 => 'This setup is available to athlete accounts.',
-    404 => 'Your profile is not available yet. Start with your basic identity.',
-    _ => 'We could not load your profile. Check your connection and retry.',
-  };
-
   Future<void> _refreshProfile() async {
-    final response = await _api.authorizedGet('/me/profile/athlete');
-    if (response.statusCode == 200) {
-      final data = _responseData(response);
-      if (data != null) _profile.addAll(data);
-    } else {
-      throw _safeMessage(response.statusCode);
+    if (mounted) setState(() => _loading = true);
+    try {
+      final data = await ref
+          .read(profileControllerProvider.notifier)
+          .loadProfile();
+      _profile.addAll(data);
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -185,24 +174,19 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
       _error = null;
     });
     try {
-      final response = await _api.authorizedGet('/sports');
-      if (response.statusCode != 200) throw _safeMessage(response.statusCode);
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final data = decoded['data'] as Map<String, dynamic>?;
-      final items = data?['sports'];
       _sports
         ..clear()
         ..addAll(
-          items is List
-              ? items.whereType<Map>().map((e) => Map<String, dynamic>.from(e))
-              : const [],
+          await ref
+              .read(profileControllerProvider.notifier)
+              .loadSportsCatalog(),
         );
       if (mounted) setState(() => _fetchingSports = false);
     } catch (e) {
       if (mounted) {
         setState(() {
           _fetchingSports = false;
-          _error = e.toString();
+          _error = apiErrorText(e);
         });
       }
     }
@@ -215,10 +199,10 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
     });
     try {
       for (final id in _selectedSports) {
-        final response = await _api.authorizedGet('/sports/$id/config');
-        if (response.statusCode != 200) throw _safeMessage(response.statusCode);
-        final data = _responseData(response);
-        final sport = data?['sport'];
+        final data = await ref
+            .read(profileControllerProvider.notifier)
+            .loadSportConfig(id);
+        final sport = data['sport'];
         if (sport is Map) _sportConfigs[id] = Map<String, dynamic>.from(sport);
       }
       if (mounted) setState(() => _fetchingConfig = false);
@@ -226,7 +210,7 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
       if (mounted) {
         setState(() {
           _fetchingConfig = false;
-          _error = e.toString();
+          _error = apiErrorText(e);
         });
       }
     }
@@ -238,13 +222,13 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
       _error = null;
     });
     try {
-      final response = await _api.authorizedPatch('/me/profile/athlete', patch);
-      if (response.statusCode != 200) throw _safeMessage(response.statusCode);
-      final data = _responseData(response);
-      if (data != null) _profile.addAll(data);
+      final data = await ref
+          .read(profileControllerProvider.notifier)
+          .saveProfile(patch);
+      _profile.addAll(data);
       return true;
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = apiErrorText(e));
       return false;
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -425,7 +409,9 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
+    final loading = _loading;
+    final saving = _saving;
+    if (loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator(color: _gold)),
       );
@@ -442,7 +428,7 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: _saving ? null : _back,
+                    onPressed: saving ? null : _back,
                     icon: const Icon(Icons.arrow_back_ios_new, size: 20),
                   ),
                   Container(
@@ -524,7 +510,7 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
                       ),
                     ),
                     TextButton(
-                      onPressed: _saving
+                      onPressed: saving
                           ? null
                           : _step == 2
                           ? _loadSports
@@ -546,7 +532,7 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
                 width: double.infinity,
                 height: 56,
                 child: FilledButton(
-                  onPressed: _saving || _fetchingSports || _fetchingConfig
+                  onPressed: saving || _fetchingSports || _fetchingConfig
                       ? null
                       : _continue,
                   style: FilledButton.styleFrom(
@@ -556,7 +542,7 @@ class _AthleteOnboardingFlowState extends State<AthleteOnboardingFlow> {
                       borderRadius: BorderRadius.circular(18),
                     ),
                   ),
-                  child: _saving || _fetchingConfig
+                  child: saving || _fetchingConfig
                       ? const SizedBox.square(
                           dimension: 22,
                           child: CircularProgressIndicator(

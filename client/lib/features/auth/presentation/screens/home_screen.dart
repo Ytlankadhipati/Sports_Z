@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../shared/theme/app_theme.dart';
 import '../../data/datasources/auth_service.dart';
@@ -7,19 +8,59 @@ import 'login_screen.dart';
 import 'link_accounts_screen.dart';
 import 'session_expired_screen.dart';
 import '../../../onboarding/presentation/screens/athlete_identity_screen.dart';
+import '../../../profile/presentation/controllers/profile_controller.dart';
 import '../../../profile/presentation/screens/my_profile_screen.dart';
+import '../../../profile/presentation/screens/edit_hub_screen.dart';
+import '../../../profile/presentation/screens/sportsz_id_screen.dart';
 
 /// Athlete Dashboard (SportsZ Light Theme).
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   final AuthService _authService = AuthService();
   int _tab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(profileControllerProvider.notifier).loadProfile();
+    });
+  }
+
+  void _openProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MyProfileScreen(
+          onViewId: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const SportsZIdScreen(),
+              ),
+            );
+          },
+          onEditProfile: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const EditHubScreen(),
+              ),
+            );
+            if (mounted) {
+              ref.read(profileControllerProvider.notifier).loadProfile();
+            }
+          },
+        ),
+      ),
+    );
+  }
 
   Future<void> _logout() async {
     await _authService.logout();
@@ -203,12 +244,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profileState = ref.watch(profileControllerProvider);
+    final profile = profileState.profile;
     final user = _authService.currentUser;
-    final name =
-        ((user?.displayName?.isNotEmpty ?? false)
+    final fullName = (profile?['full_name'] as String?)?.trim();
+    final name = (fullName != null && fullName.isNotEmpty)
+        ? fullName.toUpperCase()
+        : (((user?.displayName?.isNotEmpty ?? false)
                 ? user!.displayName!
                 : (user?.email?.split('@').first ?? 'Athlete'))
-            .toUpperCase();
+            .toUpperCase());
+    final sportszId = (profile?['sportsz_id'] as String?)?.trim();
 
     return Scaffold(
       backgroundColor: AppColors.secondaryBackground,
@@ -216,7 +262,10 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: AppColors.surface,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const SportsZLogo(size: 20, taglineColor: AppColors.textSecondary),
+        title: const SportsZLogo(
+          size: 20,
+          taglineColor: AppColors.textSecondary,
+        ),
         centerTitle: false,
         actions: [
           IconButton(
@@ -243,120 +292,132 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
             // Greeting row
-            Row(
-              children: [
-                Container(
-                  height: 52,
-                  width: 52,
-                  decoration: BoxDecoration(
-                    color: AppColors.lightGold,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.gold,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    color: AppColors.gold,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _greeting,
-                        style: const TextStyle(
-                          fontFamily: AppTypography.fontFamily,
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontFamily: AppTypography.fontFamily,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Sports ID Credential Card (Light Premium)
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.lightGold,
-                    Colors.white,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.gold, width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.gold.withValues(alpha: 0.12),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _openProfile,
               child: Row(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
-                    decoration: const BoxDecoration(
-                      color: AppColors.gold,
+                    height: 52,
+                    width: 52,
+                    decoration: BoxDecoration(
+                      color: AppColors.lightGold,
                       shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.gold, width: 1.5),
                     ),
                     child: const Icon(
-                      Icons.badge_outlined,
-                      color: Colors.white,
-                      size: 26,
+                      Icons.person,
+                      color: AppColors.gold,
+                      size: 28,
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Your SportsZ ID',
-                          style: TextStyle(
+                          _greeting,
+                          style: const TextStyle(
                             fontFamily: AppTypography.fontFamily,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
                             color: AppColors.textSecondary,
                           ),
                         ),
-                        SizedBox(height: 2),
                         Text(
-                          'SZ2025001',
-                          style: TextStyle(
+                          name,
+                          style: const TextStyle(
                             fontFamily: AppTypography.fontFamily,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.deepAccent,
-                            letterSpacing: 0.5,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Container(
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: AppColors.textMuted,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Sports ID Credential Card (Light Premium)
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SportsZIdScreen()),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.lightGold, Colors.white],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.gold, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.gold.withValues(alpha: 0.12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        color: AppColors.gold,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.badge_outlined,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Your SportsZ ID',
+                            style: TextStyle(
+                              fontFamily: AppTypography.fontFamily,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            (sportszId != null && sportszId.isNotEmpty)
+                                ? sportszId
+                                : 'SZ2025001',
+                            style: const TextStyle(
+                              fontFamily: AppTypography.fontFamily,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.deepAccent,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
                       vertical: 5,
@@ -390,7 +451,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 16),
 
             // Statistics Grid (2x2)
             Row(
@@ -413,11 +475,7 @@ class _HomeScreenState extends State<HomeScreen> {
             // Recent Activity Section
             Row(
               children: [
-                const Icon(
-                  Icons.timeline,
-                  color: AppColors.gold,
-                  size: 22,
-                ),
+                const Icon(Icons.timeline, color: AppColors.gold, size: 22),
                 const SizedBox(width: 8),
                 const Text(
                   'Recent Activity',
@@ -429,10 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const Spacer(),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text('View All'),
-                ),
+                TextButton(onPressed: () {}, child: const Text('View All')),
               ],
             ),
             const SizedBox(height: 8),
@@ -471,7 +526,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: AppColors.lightGold,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.link, color: AppColors.gold, size: 20),
+                  child: const Icon(
+                    Icons.link,
+                    color: AppColors.gold,
+                    size: 20,
+                  ),
                 ),
                 title: const Text(
                   'Linked Accounts',
@@ -490,11 +549,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontSize: 12,
                   ),
                 ),
-                trailing: const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 14),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: AppColors.textMuted,
+                  size: 14,
+                ),
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const LinkAccountsScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const LinkAccountsScreen(),
+                    ),
                   );
                 },
               ),
@@ -510,7 +575,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: AppColors.lightGold,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.person_add_alt_1, color: AppColors.gold, size: 20),
+                  child: const Icon(
+                    Icons.person_add_alt_1,
+                    color: AppColors.gold,
+                    size: 20,
+                  ),
                 ),
                 title: const Text(
                   'Athlete Onboarding (O01 / O02)',
@@ -529,7 +598,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontSize: 12,
                   ),
                 ),
-                trailing: const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 14),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: AppColors.textMuted,
+                  size: 14,
+                ),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -551,7 +624,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: AppColors.warning.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.lock_clock_outlined, color: AppColors.warning, size: 20),
+                  child: const Icon(
+                    Icons.lock_clock_outlined,
+                    color: AppColors.warning,
+                    size: 20,
+                  ),
                 ),
                 title: const Text(
                   'Test Session Timeout',
@@ -570,13 +647,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontSize: 12,
                   ),
                 ),
-                trailing: const Icon(Icons.arrow_forward_ios, color: AppColors.textMuted, size: 14),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: AppColors.textMuted,
+                  size: 14,
+                ),
                 onTap: () {
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const SessionExpiredScreen(
-                        reason: 'Your session has expired. Please sign in again.',
+                        reason:
+                            'Your session has expired. Please sign in again.',
                       ),
                     ),
                     (route) => false,
@@ -592,21 +674,19 @@ class _HomeScreenState extends State<HomeScreen> {
         height: 64,
         decoration: const BoxDecoration(
           color: AppColors.surface,
-          border: Border(
-            top: BorderSide(color: AppColors.divider, width: 1),
-          ),
+          border: Border(top: BorderSide(color: AppColors.divider, width: 1)),
         ),
         child: Row(
           children: [
             _navItem(0, Icons.home_outlined, 'Home'),
             _navItem(1, Icons.bar_chart, 'Performance'),
             _navItem(2, Icons.upload_outlined, 'Upload'),
-            _navItem(3, Icons.person_outline, 'Profile', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyProfileScreen()),
-              );
-            }),
+            _navItem(
+              3,
+              Icons.person_outline,
+              'Profile',
+              onTap: _openProfile,
+            ),
           ],
         ),
       ),
