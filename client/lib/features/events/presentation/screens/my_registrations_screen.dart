@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sports_z/core/network/api_exception.dart';
 import 'package:sports_z/features/events/data/models/event.dart';
 import 'package:sports_z/features/events/presentation/screens/event_detail_screen.dart';
-import 'package:sports_z/features/events/presentation/state/events_providers.dart';
+import 'package:sports_z/features/events/presentation/controllers/events_controller.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _myTop = AppColors.mustard900;
@@ -285,5 +286,6 @@ class _ErrorPanel extends StatelessWidget {
   );
 }
 
-String _message(Object? error) => (error?.toString() ?? 'Something went wrong.')
-    .replaceFirst('Exception: ', '');
+String _message(Object? error) => error == null
+    ? 'Something went wrong.'
+    : apiErrorText(error);

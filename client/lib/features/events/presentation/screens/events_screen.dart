@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sports_z/features/events/data/models/event.dart';
 import 'package:sports_z/features/events/presentation/screens/event_detail_screen.dart';
 import 'package:sports_z/features/events/presentation/screens/my_registrations_screen.dart';
-import 'package:sports_z/features/events/presentation/state/events_providers.dart';
+import 'package:sports_z/features/events/presentation/controllers/events_controller.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _bgTop = AppColors.mustard900;
@@ -31,9 +31,14 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   @override
   void initState() {
     super.initState();
+    ref.read(eventsControllerProvider.notifier).load(
+      status: ref.read(eventStatusProvider),
+    );
     _scroll.addListener(() {
       if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-        ref.read(eventsListProvider.notifier).loadMore();
+        ref.read(eventsControllerProvider.notifier).loadMore(
+          status: ref.read(eventStatusProvider),
+        );
       }
     });
   }
@@ -46,6 +51,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 
   void _setStatus(String status) {
     ref.read(eventStatusProvider.notifier).select(status);
+    ref.read(eventsControllerProvider.notifier).load(status: status);
   }
 
   @override
@@ -100,12 +106,12 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   }
 
   Widget _body() {
-    final events = ref.watch(eventsListProvider);
-    if (events.isLoading) {
+    final events = ref.watch(eventsControllerProvider);
+    if (events.isLoading && events.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (events.hasError) {
-      final message = events.error.toString().replaceFirst('Exception: ', '');
+    if (events.errorMessage != null && events.items.isEmpty) {
+      final message = events.errorMessage!;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -120,7 +126,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () =>
-                    ref.read(eventsListProvider.notifier).refresh(),
+                    ref.read(eventsControllerProvider.notifier).refresh(
+                      status: ref.read(eventStatusProvider),
+                    ),
                 child: const Text('Retry'),
               ),
             ],
@@ -128,16 +136,30 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         ),
       );
     }
-    final data = events.requireValue;
+    final data = events;
     if (data.items.isEmpty) {
-      return const Center(
-        child: Text('No events found', style: TextStyle(color: Colors.white70)),
+      return RefreshIndicator(
+        color: AppColors.gold,
+        onRefresh: () => ref.read(eventsControllerProvider.notifier).refresh(
+          status: ref.read(eventStatusProvider),
+        ),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 180),
+            Center(
+              child: Text('No events found', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
+        ),
       );
     }
     return RefreshIndicator(
       color: AppColors.gold,
       backgroundColor: AppColors.mustard800,
-      onRefresh: () => ref.read(eventsListProvider.notifier).refresh(),
+      onRefresh: () => ref.read(eventsControllerProvider.notifier).refresh(
+        status: ref.read(eventStatusProvider),
+      ),
       child: ListView.separated(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),

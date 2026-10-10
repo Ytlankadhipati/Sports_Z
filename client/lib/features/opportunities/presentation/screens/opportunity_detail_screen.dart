@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sports_z/core/network/api_exception.dart';
 import 'package:sports_z/features/opportunities/data/models/opportunity.dart';
-import 'package:sports_z/features/opportunities/presentation/state/opportunities_providers.dart';
-import 'package:sports_z/features/saved/presentation/state/saved_providers.dart';
+import 'package:sports_z/features/opportunities/presentation/controllers/opportunities_controller.dart';
+import 'package:sports_z/features/saved/presentation/controllers/saved_controller.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _bgTop = AppColors.mustard900;
@@ -82,10 +83,11 @@ class OpportunityDetailScreen extends ConsumerWidget {
 
     // Summary bilkul nahi hai (seedha link se aaye) aur abhi load ho raha hai
     if (summary == null) {
-      if (detail.isLoading)
+      if (detail.isLoading) {
         return const Center(child: CircularProgressIndicator());
+      }
       return _ErrorBox(
-        message: detail.error.toString().replaceFirst('Exception: ', ''),
+        message: apiErrorText(detail.error!),
         onRetry: reload,
       );
     }
@@ -137,7 +139,7 @@ class OpportunityDetailScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            detail.error.toString().replaceFirst('Exception: ', ''),
+            apiErrorText(detail.error!),
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 8),
@@ -208,7 +210,7 @@ class _OpportunityBookmarkState extends ConsumerState<_OpportunityBookmark> {
       setState(() => _optimisticValue = previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          content: Text(apiErrorText(error)),
         ),
       );
     } finally {

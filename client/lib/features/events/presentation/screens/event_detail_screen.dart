@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sports_z/core/network/api_exception.dart';
 import 'package:sports_z/features/events/data/models/event.dart';
 import 'package:sports_z/features/events/presentation/screens/my_registrations_screen.dart';
-import 'package:sports_z/features/events/presentation/state/events_providers.dart';
-import 'package:sports_z/features/saved/presentation/state/saved_providers.dart';
+import 'package:sports_z/features/events/presentation/controllers/events_controller.dart';
+import 'package:sports_z/features/saved/presentation/controllers/saved_controller.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _detailTop = AppColors.mustard900;
@@ -23,7 +24,7 @@ class EventDetailScreen extends ConsumerWidget {
     final detail = detailState.asData?.value;
     final summary = detail?.summary ?? event;
     final error = detailState.hasError
-        ? detailState.error.toString().replaceFirst('Exception: ', '')
+        ? apiErrorText(detailState.error!)
         : null;
 
     if (summary == null) {
@@ -214,7 +215,7 @@ class _EventBookmarkState extends ConsumerState<_EventBookmark> {
       setState(() => _optimisticValue = previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          content: Text(apiErrorText(error)),
         ),
       );
     } finally {
@@ -284,7 +285,7 @@ class EventRegistrationConfirmScreen extends ConsumerWidget {
     final action = ref.watch(eventRegistrationActionProvider);
     final isLoading = action.isLoading;
     final error = action.hasError
-        ? action.error.toString().replaceFirst('Exception: ', '')
+        ? apiErrorText(action.error!)
         : null;
 
     return Scaffold(

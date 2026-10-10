@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sports_z/features/opportunities/data/models/opportunity.dart';
 import 'package:sports_z/features/opportunities/presentation/screens/opportunity_detail_screen.dart';
-import 'package:sports_z/features/opportunities/presentation/state/opportunities_providers.dart';
+import 'package:sports_z/features/opportunities/presentation/controllers/opportunities_controller.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _bgTop = AppColors.mustard900;
@@ -33,9 +33,13 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
   @override
   void initState() {
     super.initState();
+    ref.read(opportunitiesControllerProvider.notifier).load(status: 'open');
     _scroll.addListener(() {
       if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-        ref.read(opportunitiesProvider.notifier).loadMore();
+        ref.read(opportunitiesControllerProvider.notifier).loadMore(
+          status: 'open',
+          type: ref.read(opportunityTypeProvider),
+        );
       }
     });
   }
@@ -48,6 +52,10 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
 
   void _setType(String? type) {
     ref.read(opportunityTypeProvider.notifier).select(type);
+    ref.read(opportunitiesControllerProvider.notifier).load(
+      status: 'open',
+      type: type,
+    );
   }
 
   void _openDetail(Opportunity item) {
@@ -106,15 +114,12 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
   }
 
   Widget _body() {
-    final opportunities = ref.watch(opportunitiesProvider);
-    if (opportunities.isLoading) {
+    final opportunities = ref.watch(opportunitiesControllerProvider);
+    if (opportunities.isLoading && opportunities.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (opportunities.hasError) {
-      final message = opportunities.error.toString().replaceFirst(
-        'Exception: ',
-        '',
-      );
+    if (opportunities.errorMessage != null && opportunities.items.isEmpty) {
+      final message = opportunities.errorMessage!;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -129,7 +134,10 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () =>
-                    ref.read(opportunitiesProvider.notifier).refresh(),
+                    ref.read(opportunitiesControllerProvider.notifier).refresh(
+                      status: 'open',
+                      type: ref.read(opportunityTypeProvider),
+                    ),
                 child: const Text('Retry'),
               ),
             ],
@@ -137,25 +145,41 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
         ),
       );
     }
-    final data = opportunities.requireValue;
+    final data = opportunities;
     if (data.items.isEmpty) {
-      return const Center(
-        child: Text(
-          'No opportunities found',
-          style: TextStyle(color: Colors.white70),
+      return RefreshIndicator(
+        color: AppColors.gold,
+        onRefresh: () => ref.read(opportunitiesControllerProvider.notifier).refresh(
+          status: 'open',
+          type: ref.read(opportunityTypeProvider),
+        ),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 180),
+            Center(
+              child: Text(
+                'No opportunities found',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
         ),
       );
     }
     return RefreshIndicator(
       color: AppColors.gold,
       backgroundColor: AppColors.mustard800,
-      onRefresh: () => ref.read(opportunitiesProvider.notifier).refresh(),
+      onRefresh: () => ref.read(opportunitiesControllerProvider.notifier).refresh(
+        status: 'open',
+        type: ref.read(opportunityTypeProvider),
+      ),
       child: ListView.separated(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         itemCount: data.items.length + (data.isLoadingMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 14),
+        separatorBuilder: (_, _) => const SizedBox(height: 14),
         itemBuilder: (_, i) {
           if (i >= data.items.length) {
             return const Padding(
@@ -188,7 +212,7 @@ class _Header extends StatelessWidget {
             'assets/images/splash_bg.jpg',
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
-            errorBuilder: (_, __, ___) => const DecoratedBox(
+            errorBuilder: (_, _, _) => const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,

@@ -5,6 +5,20 @@ import '../../../../core/network/providers.dart';
 import '../../data/models/opportunity.dart';
 import '../../data/repositories/opportunities_repository.dart';
 
+final opportunityTypeProvider =
+    NotifierProvider<OpportunityTypeNotifier, String?>(
+      OpportunityTypeNotifier.new,
+    );
+
+class OpportunityTypeNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String? type) {
+    if (state != type) state = type;
+  }
+}
+
 final opportunitiesRepositoryProvider = Provider<OpportunitiesRepository>(
   (ref) => OpportunitiesRepository(ref.watch(dioProvider)),
 );
@@ -31,27 +45,50 @@ class OpportunitiesFeedState {
 }
 
 class OpportunitiesController extends Notifier<OpportunitiesFeedState> {
+  final Map<String, OpportunityPage> _pageCache = {};
+  String? _loadingKey;
+  int _requestId = 0;
+
   @override
   OpportunitiesFeedState build() => const OpportunitiesFeedState();
 
   Future<void> load({required String status, String? type}) async {
-    state = const OpportunitiesFeedState(isLoading: true);
+    final key = '$status|${type ?? 'all'}';
+    final cached = _pageCache[key];
+    if (_loadingKey == key) return;
+    final requestId = ++_requestId;
+    _loadingKey = key;
+    state = OpportunitiesFeedState(
+      items: cached?.items ?? const [],
+      nextCursor: cached?.nextCursor,
+      isLoading: true,
+    );
     try {
       final page = await ref
           .read(opportunitiesRepositoryProvider)
           .list(status: status, type: type);
+      _pageCache[key] = page;
+      if (requestId != _requestId) return;
       state = OpportunitiesFeedState(
         items: page.items,
         nextCursor: page.nextCursor,
         isLoading: false,
       );
     } catch (error) {
+      if (requestId != _requestId) return;
       state = OpportunitiesFeedState(
+        items: cached?.items ?? const [],
+        nextCursor: cached?.nextCursor,
         errorMessage: apiErrorText(error),
         isLoading: false,
       );
+    } finally {
+      if (_loadingKey == key) _loadingKey = null;
     }
   }
+
+  Future<void> refresh({required String status, String? type}) =>
+      load(status: status, type: type);
 
   Future<void> loadMore({required String status, String? type}) async {
     final cursor = state.nextCursor;
@@ -74,3 +111,21 @@ class OpportunitiesController extends Notifier<OpportunitiesFeedState> {
     }
   }
 }
+
+final opportunityDetailProvider = FutureProvider.autoDispose
+    .family<OpportunityDetail, String>((ref, publicId) async {
+      try {
+        return await ref
+            .watch(opportunitiesRepositoryProvider)
+            .getById(publicId);
+      } catch (error) {
+        final apiError = apiExceptionFrom(error);
+        if (apiError?.statusCode == 404) {
+          throw const ApiException(
+            message: 'This opportunity is no longer available.',
+            statusCode: 404,
+          );
+        }
+        rethrow;
+      }
+    });

@@ -13,12 +13,17 @@ from app.modules.identity import organizations_router
 from app.modules.identity import sportsz_id_router
 from app.modules.opportunities import router as opportunities_router
 from app.modules.events import router as events_router
+from app.modules.discovery import router as saved_router
+from app.modules.events.repository import ensure_indexes as ensure_event_indexes
+from app.modules.discovery.repository import ensure_indexes as ensure_saved_indexes
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     client.admin.command("ping")
     ensure_indexes()
+    ensure_event_indexes()
+    ensure_saved_indexes()
     yield
 
 
@@ -53,6 +58,7 @@ app.include_router(organizations_router.router)
 app.include_router(sportsz_id_router.router)
 app.include_router(opportunities_router.router)
 app.include_router(events_router.router)
+app.include_router(saved_router.router)
 
 
 @app.get("/")

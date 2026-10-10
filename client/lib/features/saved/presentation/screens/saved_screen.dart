@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sports_z/core/network/api_exception.dart';
 import 'package:sports_z/features/events/presentation/screens/event_detail_screen.dart';
 import 'package:sports_z/features/opportunities/presentation/screens/opportunity_detail_screen.dart';
 import 'package:sports_z/features/saved/data/models/saved_item.dart';
-import 'package:sports_z/features/saved/presentation/state/saved_providers.dart';
+import 'package:sports_z/features/saved/presentation/controllers/saved_controller.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _savedBottom = Color(0xFF120D02);
@@ -131,7 +132,7 @@ class _SavedScreenState extends ConsumerState<SavedScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              saved.error.toString().replaceFirst('Exception: ', ''),
+              apiErrorText(saved.error!),
               style: const TextStyle(color: Colors.white70),
               textAlign: TextAlign.center,
             ),
@@ -203,7 +204,7 @@ class _SavedScreenState extends ConsumerState<SavedScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          content: Text(apiErrorText(error)),
         ),
       );
     }
