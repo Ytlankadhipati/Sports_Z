@@ -21,7 +21,7 @@ class AuthRepository {
     if (idToken == null) return null;
 
     final response = await _dio.post<Map<String, dynamic>>(
-      '/auth/verify',
+      '/auth/session',
       data: {'id_token': idToken},
     );
     final data = response.data;
@@ -36,10 +36,14 @@ class AuthRepository {
 
   Future<Map<String, dynamic>?> selectRole(String role) async {
     if (_authService.currentUser == null) return null;
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/auth/select-role',
-      data: {'role': role},
-    );
+    // V3: athlete enrolment is POST /me/roles/athlete (no body; identity comes
+    // from the token). Other roles still use the generic /auth/select-role.
+    final response = role == 'athlete'
+        ? await _dio.post<Map<String, dynamic>>('/me/roles/athlete')
+        : await _dio.post<Map<String, dynamic>>(
+            '/auth/select-role',
+            data: {'role': role},
+          );
     final data = response.data;
     if (data == null || response.statusCode != 200) return null;
     await _authService.saveBackendSession(
@@ -48,5 +52,16 @@ class AuthRepository {
       role: data['role'] as String?,
     );
     return data;
+  }
+
+  /// V3: POST /auth/logout (A07, X01). Best-effort: the caller must still
+  /// sign out of Firebase and clear the local session even if this fails
+  /// (offline / expired token).
+  Future<void> logoutFromBackend() async {
+    try {
+      await _dio.post<void>('/auth/logout');
+    } on DioException {
+      // Ignore: local sign-out must not depend on the network.
+    }
   }
 }
