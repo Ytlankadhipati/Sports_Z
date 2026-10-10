@@ -59,10 +59,23 @@ class ProfileController extends Notifier<ProfileControllerState> {
   @override
   ProfileControllerState build() => const ProfileControllerState();
 
-  Future<Map<String, dynamic>> loadProfile() => _run(
-    ref.read(profileRepositoryProvider).getAthleteProfile,
-    onSuccess: (data) => state = state.copyWith(profile: data),
-  );
+  Future<Map<String, dynamic>>? _inFlightProfileLoad;
+
+  Future<Map<String, dynamic>> loadProfile() {
+    final inFlight = _inFlightProfileLoad;
+    if (inFlight != null) return inFlight;
+
+    final future = _run(
+      ref.read(profileRepositoryProvider).getAthleteProfile,
+      onSuccess: (data) => state = state.copyWith(profile: data),
+    );
+    _inFlightProfileLoad = future;
+    return future.whenComplete(() {
+      if (identical(_inFlightProfileLoad, future)) {
+        _inFlightProfileLoad = null;
+      }
+    });
+  }
 
   Future<Map<String, dynamic>> loadSportszId() => _run(
     ref.read(profileRepositoryProvider).getSportszId,
