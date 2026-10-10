@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../shared/theme/app_theme.dart';
 import '../../data/datasources/auth_service.dart';
+import '../controllers/auth_controller.dart';
 import '../../../../../shared/widgets/sportsz_logo.dart';
 import 'login_screen.dart';
 import 'link_accounts_screen.dart';
@@ -63,6 +64,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _logout() async {
+    // Best-effort: tell the backend to invalidate the server-side session.
+    // A 3-second timeout and all exceptions are swallowed so an offline device
+    // or an already-expired token never blocks the local sign-out.
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .logoutFromBackend()
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // Intentionally ignored — local sign-out must always succeed.
+    }
     await _authService.logout();
     if (mounted) {
       Navigator.pushAndRemoveUntil(
