@@ -20,9 +20,13 @@ if _NAME not in sys.modules:
     _stub.resolve_firebase_user = lambda t: {"user_id": "u1", "firebase_uid": "f1", "role": None}
     sys.modules[_NAME] = _stub
 
-from app.core.dependencies import get_current_user  # noqa: E402
 from app.core.errors import register_error_handlers  # noqa: E402
 from app.modules.identity import me_router  # noqa: E402
+
+# Use the exact function object the route depends on. Importing it from
+# app.core.dependencies can give a different object if another test file stubs
+# that module, and then dependency_overrides would silently not match.
+get_current_user = me_router.get_current_user
 
 FULL_EMAIL = "ravi.kumar@example.com"
 FULL_PHONE = "+919876543210"
