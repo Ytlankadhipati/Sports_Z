@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../config/api_config.dart';
+import '../auth/unauthorized_events.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'interceptors/error_interceptor.dart';
 
@@ -22,7 +23,10 @@ class DioClient {
         responseType: ResponseType.json,
       ),
     );
-    dio.interceptors.addAll([AuthInterceptor(dio: dio), ErrorInterceptor()]);
+    dio.interceptors.addAll([
+      AuthInterceptor(dio: dio),
+      ErrorInterceptor(onUnauthorized: UnauthorizedEvents.instance.signal401),
+    ]);
     return dio;
   }
 }

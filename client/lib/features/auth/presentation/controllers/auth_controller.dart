@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/auth/unauthorized_events.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/network/providers.dart';
 import '../../data/datasources/auth_service.dart';
@@ -18,6 +19,13 @@ final authRepositoryProvider = Provider<AuthRepository>(
 
 final authControllerProvider =
     NotifierProvider<AuthController, AuthControllerState>(AuthController.new);
+
+/// Surfaces [UnauthorizedEvents] as a Riverpod stream so widgets can
+/// react to global 401 events with [ref.listen] without recreating the
+/// provider on every rebuild.
+final unauthorizedEventsProvider = StreamProvider<void>(
+  (ref) => UnauthorizedEvents.instance.stream,
+);
 
 class AuthControllerState {
   const AuthControllerState({this.isLoading = false, this.errorMessage});
@@ -38,8 +46,15 @@ class AuthController extends Notifier<AuthControllerState> {
   @override
   AuthControllerState build() => const AuthControllerState();
 
-  Future<Map<String, dynamic>?> verifyWithBackend() =>
-      _run(() => ref.read(authRepositoryProvider).verifyWithBackend());
+  Future<Map<String, dynamic>?> verifyWithBackend() async {
+    final result = await _run(
+      () => ref.read(authRepositoryProvider).verifyWithBackend(),
+    );
+    // Reset the 401 debounce so a future expiry (after this re-login) still
+    // fires the global session-expired event.
+    if (result != null) UnauthorizedEvents.instance.reset();
+    return result;
+  }
 
   Future<Map<String, dynamic>?> selectRole(String role) =>
       _run(() => ref.read(authRepositoryProvider).selectRole(role));
