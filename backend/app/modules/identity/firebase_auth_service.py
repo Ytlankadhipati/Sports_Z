@@ -173,8 +173,17 @@ def resolve_firebase_user(id_token: str) -> dict:
             detail="User not found",
         )
 
+    firebase_info = decoded_token.get("firebase") or {}
+    claims = {
+        "email": decoded_token.get("email"),
+        "email_verified": bool(decoded_token.get("email_verified")),
+        "phone_number": decoded_token.get("phone_number"),
+        "providers": list((firebase_info.get("identities") or {}).keys()),
+    }
+
     return {
         "user_id": str(user["_id"]),
         "firebase_uid": firebase_uid,
         "role": user.get("role"),
+        "claims": claims,
     }
