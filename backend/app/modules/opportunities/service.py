@@ -16,11 +16,12 @@ def _summary(doc: dict) -> dict:
     }
 
 
-def _detail(doc: dict) -> dict:
+def _detail(doc: dict, is_saved: bool = False) -> dict:
     out = _summary(doc)
     out["description"] = doc.get("description", "")
     # Raw eligibility rules bahar nahi jaate, sirf padhne layak summary
     out["eligibility_summary"] = doc.get("eligibility_summary", "")
+    out["is_saved"] = is_saved
     return out
 
 
@@ -40,6 +41,17 @@ def list_opportunities(
     return [_summary(r) for r in rows], next_cursor
 
 
-def get_opportunity(public_id: str) -> Optional[dict]:
+def get_opportunity(public_id: str, is_saved: bool = False) -> Optional[dict]:
     doc = repository.find_by_public_id(public_id)
-    return _detail(doc) if doc else None
+    return _detail(doc, is_saved) if doc else None
+
+
+def get_saved_summaries(public_ids: list[str]) -> dict[str, dict]:
+    return {
+        row["public_id"]: {
+            key: value
+            for key, value in _summary(row).items()
+            if key != "public_id"
+        }
+        for row in repository.find_by_public_ids(public_ids)
+    }

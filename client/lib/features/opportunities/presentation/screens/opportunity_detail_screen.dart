@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sports_z/features/opportunities/data/datasources/opportunities_api.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sports_z/features/opportunities/data/models/opportunity.dart';
+import 'package:sports_z/features/opportunities/presentation/state/opportunities_providers.dart';
+import 'package:sports_z/features/saved/presentation/state/saved_providers.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _bgTop = AppColors.mustard900;
@@ -12,7 +14,7 @@ const _badColor = Color(0xFFFF8A80);
 /// OP02: Opportunity detail.
 /// [preview] list se aaya hua summary hai, taaki detail load hone tak
 /// title/tags/deadline turant dikh jayein.
-class OpportunityDetailScreen extends StatefulWidget {
+class OpportunityDetailScreen extends ConsumerWidget {
   const OpportunityDetailScreen({
     super.key,
     required this.publicId,
@@ -23,45 +25,7 @@ class OpportunityDetailScreen extends StatefulWidget {
   final Opportunity? preview;
 
   @override
-  State<OpportunityDetailScreen> createState() =>
-      _OpportunityDetailScreenState();
-}
-
-class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
-  final _api = OpportunitiesApi();
-  OpportunityDetail? _detail;
-  bool _loading = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final d = await _api.getById(widget.publicId);
-      if (!mounted) return;
-      setState(() {
-        _detail = d;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -93,10 +57,12 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const Spacer(),
+                      _OpportunityBookmark(publicId: publicId),
                     ],
                   ),
                 ),
-                Expanded(child: _body()),
+                Expanded(child: _body(ref)),
               ],
             ),
           ),
@@ -105,19 +71,29 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
     );
   }
 
-  Widget _body() {
-    final summary = _detail?.summary ?? widget.preview;
+  Widget _body(WidgetRef ref) {
+    final detail = ref.watch(opportunityDetailProvider(publicId));
+    final loadedDetail = detail.asData?.value;
+    final summary = loadedDetail?.summary ?? preview;
+    Future<void> reload() async {
+      ref.invalidate(opportunityDetailProvider(publicId));
+      await ref.read(opportunityDetailProvider(publicId).future);
+    }
 
     // Summary bilkul nahi hai (seedha link se aaye) aur abhi load ho raha hai
     if (summary == null) {
-      if (_loading) return const Center(child: CircularProgressIndicator());
-      return _ErrorBox(message: _error ?? 'Something went wrong.', onRetry: _load);
+      if (detail.isLoading)
+        return const Center(child: CircularProgressIndicator());
+      return _ErrorBox(
+        message: detail.error.toString().replaceFirst('Exception: ', ''),
+        onRetry: reload,
+      );
     }
 
     return RefreshIndicator(
       color: AppColors.gold,
       backgroundColor: AppColors.mustard800,
-      onRefresh: _load,
+      onRefresh: reload,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -128,12 +104,16 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
           const SizedBox(height: 16),
           _Section(
             title: 'About',
-            child: _sectionBody(_detail?.description),
+            child: _sectionBody(loadedDetail?.description, detail, reload),
           ),
           const SizedBox(height: 16),
           _Section(
             title: 'Eligibility',
-            child: _sectionBody(_detail?.eligibilitySummary),
+            child: _sectionBody(
+              loadedDetail?.eligibilitySummary,
+              detail,
+              reload,
+            ),
           ),
         ],
       ),
@@ -141,9 +121,13 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
   }
 
   /// description / eligibility ka content: loading, error ya text.
-  Widget _sectionBody(String? text) {
-    if (_detail == null) {
-      if (_loading) {
+  Widget _sectionBody(
+    String? text,
+    AsyncValue<OpportunityDetail> detail,
+    Future<void> Function() reload,
+  ) {
+    if (!detail.hasValue) {
+      if (detail.isLoading) {
         return const Padding(
           padding: EdgeInsets.symmetric(vertical: 8),
           child: LinearProgressIndicator(minHeight: 3),
@@ -153,11 +137,11 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _error ?? 'Could not load details.',
+            detail.error.toString().replaceFirst('Exception: ', ''),
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 8),
-          TextButton(onPressed: _load, child: const Text('Retry')),
+          TextButton(onPressed: reload, child: const Text('Retry')),
         ],
       );
     }
@@ -170,8 +154,66 @@ class _OpportunityDetailScreenState extends State<OpportunityDetailScreen> {
     }
     return Text(
       t,
-      style: const TextStyle(color: Colors.white70, fontSize: 14.5, height: 1.5),
+      style: const TextStyle(
+        color: Colors.white70,
+        fontSize: 14.5,
+        height: 1.5,
+      ),
     );
+  }
+}
+
+class _OpportunityBookmark extends ConsumerStatefulWidget {
+  const _OpportunityBookmark({required this.publicId});
+
+  final String publicId;
+
+  @override
+  ConsumerState<_OpportunityBookmark> createState() =>
+      _OpportunityBookmarkState();
+}
+
+class _OpportunityBookmarkState extends ConsumerState<_OpportunityBookmark> {
+  bool? _optimisticValue;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = ref.watch(opportunityDetailProvider(widget.publicId));
+    final isSaved = _optimisticValue ?? detail.asData?.value.isSaved ?? false;
+    return IconButton(
+      tooltip: isSaved ? 'Remove from Saved' : 'Save opportunity',
+      onPressed: _busy ? null : () => _toggle(isSaved),
+      icon: Icon(
+        isSaved ? Icons.bookmark : Icons.bookmark_border,
+        color: AppColors.gold,
+      ),
+    );
+  }
+
+  Future<void> _toggle(bool previous) async {
+    final next = !previous;
+    setState(() {
+      _busy = true;
+      _optimisticValue = next;
+    });
+    try {
+      await ref
+          .read(savedActionProvider.notifier)
+          .setSaved('opportunity', widget.publicId, next);
+      if (!mounted) return;
+      ref.invalidate(opportunityDetailProvider(widget.publicId));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _optimisticValue = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }
 
@@ -226,7 +268,11 @@ class _TopCard extends StatelessWidget {
                     colors: [AppColors.mustard500, AppColors.mustard700],
                   ),
                 ),
-                child: Icon(_sportIcon(item.sportId), color: Colors.white, size: 30),
+                child: Icon(
+                  _sportIcon(item.sportId),
+                  color: Colors.white,
+                  size: 30,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -245,7 +291,10 @@ class _TopCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         sub,
-                        style: const TextStyle(color: Colors.white60, fontSize: 13.5),
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 13.5,
+                        ),
                       ),
                     ],
                   ],
@@ -277,7 +326,9 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final deadline = item.deadline;
-    final deadlineText = deadline == null ? 'No deadline' : formatDate(deadline);
+    final deadlineText = deadline == null
+        ? 'No deadline'
+        : formatDate(deadline);
     final deadlineLabel = item.isOpen ? 'Apply by' : 'Closed on';
 
     return Container(
@@ -417,7 +468,11 @@ class _Tag extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

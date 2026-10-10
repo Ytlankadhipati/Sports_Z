@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sports_z/features/opportunities/data/datasources/opportunities_api.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sports_z/features/opportunities/data/models/opportunity.dart';
 import 'package:sports_z/features/opportunities/presentation/screens/opportunity_detail_screen.dart';
+import 'package:sports_z/features/opportunities/presentation/state/opportunities_providers.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _bgTop = AppColors.mustard900;
@@ -10,14 +11,15 @@ const _bgBottom = Color(0xFF120D02);
 const _okColor = Color(0xFF5CD68A);
 const _badColor = Color(0xFFFF8A80);
 
-class OpportunitiesScreen extends StatefulWidget {
+class OpportunitiesScreen extends ConsumerStatefulWidget {
   const OpportunitiesScreen({super.key});
 
   @override
-  State<OpportunitiesScreen> createState() => _OpportunitiesScreenState();
+  ConsumerState<OpportunitiesScreen> createState() =>
+      _OpportunitiesScreenState();
 }
 
-class _OpportunitiesScreenState extends State<OpportunitiesScreen> {
+class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
   static const _filters = <String?, String>{
     null: 'All',
     'trial': 'Trials',
@@ -26,24 +28,16 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen> {
     'camp': 'Camps',
   };
 
-  final _api = OpportunitiesApi();
   final _scroll = ScrollController();
-  final List<Opportunity> _items = [];
-  String? _cursor;
-  String? _type;
-  bool _loading = true;
-  bool _loadingMore = false;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(() {
       if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-        _loadMore();
+        ref.read(opportunitiesProvider.notifier).loadMore();
       }
     });
-    _load();
   }
 
   @override
@@ -52,60 +46,15 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final page = await _api.list(type: _type);
-      if (!mounted) return;
-      setState(() {
-        _items
-          ..clear()
-          ..addAll(page.items);
-        _cursor = page.nextCursor;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (_loading || _loadingMore || _cursor == null) return;
-    setState(() => _loadingMore = true);
-    try {
-      final page = await _api.list(type: _type, cursor: _cursor);
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(page.items);
-        _cursor = page.nextCursor;
-        _loadingMore = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loadingMore = false);
-    }
-  }
-
   void _setType(String? type) {
-    if (type == _type) return;
-    _type = type;
-    _load();
+    ref.read(opportunityTypeProvider.notifier).select(type);
   }
 
   void _openDetail(Opportunity item) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => OpportunityDetailScreen(
-          publicId: item.publicId,
-          preview: item,
-        ),
+        builder: (_) =>
+            OpportunityDetailScreen(publicId: item.publicId, preview: item),
       ),
     );
   }
@@ -141,7 +90,7 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen> {
                         padding: const EdgeInsets.only(right: 8),
                         child: _FilterPill(
                           label: e.value,
-                          selected: _type == e.key,
+                          selected: ref.watch(opportunityTypeProvider) == e.key,
                           onTap: () => _setType(e.key),
                         ),
                       ),
@@ -157,48 +106,64 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen> {
   }
 
   Widget _body() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
+    final opportunities = ref.watch(opportunitiesProvider);
+    if (opportunities.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (opportunities.hasError) {
+      final message = opportunities.error.toString().replaceFirst(
+        'Exception: ',
+        '',
+      );
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70)),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
+              ElevatedButton(
+                onPressed: () =>
+                    ref.read(opportunitiesProvider.notifier).refresh(),
+                child: const Text('Retry'),
+              ),
             ],
           ),
         ),
       );
     }
-    if (_items.isEmpty) {
+    final data = opportunities.requireValue;
+    if (data.items.isEmpty) {
       return const Center(
-        child: Text('No opportunities found',
-            style: TextStyle(color: Colors.white70)),
+        child: Text(
+          'No opportunities found',
+          style: TextStyle(color: Colors.white70),
+        ),
       );
     }
     return RefreshIndicator(
       color: AppColors.gold,
       backgroundColor: AppColors.mustard800,
-      onRefresh: _load,
+      onRefresh: () => ref.read(opportunitiesProvider.notifier).refresh(),
       child: ListView.separated(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        itemCount: _items.length + (_loadingMore ? 1 : 0),
+        itemCount: data.items.length + (data.isLoadingMore ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(height: 14),
         itemBuilder: (_, i) {
-          if (i >= _items.length) {
+          if (i >= data.items.length) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             );
           }
-          final item = _items[i];
+          final item = data.items[i];
           return _OpportunityCard(item: item, onTap: () => _openDetail(item));
         },
       ),
@@ -314,7 +279,9 @@ class _FilterPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? AppColors.gold : Colors.white.withValues(alpha: 0.08),
+          color: selected
+              ? AppColors.gold
+              : Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: selected
@@ -351,7 +318,11 @@ class _Tag extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -414,7 +385,11 @@ class _OpportunityCard extends StatelessWidget {
                       colors: [AppColors.mustard500, AppColors.mustard700],
                     ),
                   ),
-                  child: Icon(_icon(item.sportId), color: Colors.white, size: 26),
+                  child: Icon(
+                    _icon(item.sportId),
+                    color: Colors.white,
+                    size: 26,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -432,7 +407,10 @@ class _OpportunityCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         '${item.organizationName} • ${item.location}',
-                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
@@ -455,7 +433,11 @@ class _OpportunityCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.schedule, size: 16, color: AppColors.goldBright),
+                const Icon(
+                  Icons.schedule,
+                  size: 16,
+                  color: AppColors.goldBright,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(

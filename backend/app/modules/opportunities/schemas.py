@@ -22,6 +22,7 @@ class OpportunitySummary(_Base):
 class OpportunityDetail(OpportunitySummary):
     description: str
     eligibility_summary: str
+    is_saved: bool
 
 
 class Meta(_Base):

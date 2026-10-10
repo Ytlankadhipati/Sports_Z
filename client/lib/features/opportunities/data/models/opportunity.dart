@@ -5,8 +5,18 @@ DateTime? _parseUtc(String? s) {
 }
 
 const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 String formatDate(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
@@ -52,11 +62,13 @@ class OpportunityDetail {
   final Opportunity summary;
   final String description;
   final String eligibilitySummary;
+  final bool isSaved;
 
   const OpportunityDetail({
     required this.summary,
     required this.description,
     required this.eligibilitySummary,
+    this.isSaved = false,
   });
 
   factory OpportunityDetail.fromJson(Map<String, dynamic> j) =>
@@ -64,6 +76,7 @@ class OpportunityDetail {
         summary: Opportunity.fromJson(j),
         description: (j['description'] ?? '') as String,
         eligibilitySummary: (j['eligibility_summary'] ?? '') as String,
+        isSaved: (j['is_saved'] ?? false) as bool,
       );
 }
 

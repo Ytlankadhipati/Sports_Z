@@ -1,17 +1,10 @@
-import 'dart:convert';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
-import 'package:sports_z/core/config/api_config.dart';
+import 'package:dio/dio.dart';
 import 'package:sports_z/features/opportunities/data/models/opportunity.dart';
 
 class OpportunitiesApi {
-  /// Firebase ID token (backend ab yahi verify karta hai).
-  Future<String> _token() async {
-    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-    if (token == null) throw Exception('Please log in again.');
-    return token;
-  }
+  OpportunitiesApi(this._dio);
+
+  final Dio _dio;
 
   Future<OpportunityPage> list({
     String? type,
@@ -19,42 +12,60 @@ class OpportunitiesApi {
     String? cursor,
     int limit = 20,
   }) async {
-    final token = await _token();
-
-    final uri = Uri.parse('${ApiConfig.baseUrl}/v1/opportunities').replace(
-      queryParameters: {
-        'status': status,
-        'limit': '$limit',
-        if (type != null) 'type': type,
-        if (cursor != null) 'cursor': cursor,
-      },
-    );
-
-    final res = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
-    if (res.statusCode == 401) throw Exception('Session expired. Please log in again.');
-    if (res.statusCode != 200) throw Exception('Could not load opportunities (${res.statusCode}).');
-
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
-    final items = (body['data'] as List)
-        .map((e) => Opportunity.fromJson(e as Map<String, dynamic>))
-        .toList();
-    return OpportunityPage(items, (body['meta'] as Map)['next_cursor'] as String?);
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/v1/opportunities',
+        queryParameters: {
+          'status': status,
+          'limit': limit,
+          if (type != null) 'type': type,
+          if (cursor != null) 'cursor': cursor,
+        },
+      );
+      final body = response.data!;
+      final items = (body['data'] as List)
+          .map((item) => Opportunity.fromJson(item as Map<String, dynamic>))
+          .toList();
+      return OpportunityPage(
+        items,
+        (body['meta'] as Map<String, dynamic>)['next_cursor'] as String?,
+      );
+    } on DioException catch (error) {
+      _throwListError(error);
+    }
   }
 
-  /// OP02: ek opportunity ki poori detail.
   Future<OpportunityDetail> getById(String publicId) async {
-    final token = await _token();
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/v1/opportunities/${Uri.encodeComponent(publicId)}',
+      );
+      return OpportunityDetail.fromJson(
+        response.data!['data'] as Map<String, dynamic>,
+      );
+    } on DioException catch (error) {
+      _throwDetailError(error);
+    }
+  }
 
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/v1/opportunities/${Uri.encodeComponent(publicId)}',
-    );
+  Never _throwListError(DioException error) {
+    final status = error.response?.statusCode;
+    if (error.error is LoginRequired) throw Exception('Please log in again.');
+    if (status == 401) throw Exception('Session expired. Please log in again.');
+    if (status != null)
+      throw Exception('Could not load opportunities ($status).');
+    throw Exception('Could not connect to the server. Please try again.');
+  }
 
-    final res = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
-    if (res.statusCode == 401) throw Exception('Session expired. Please log in again.');
-    if (res.statusCode == 404) throw Exception('This opportunity is no longer available.');
-    if (res.statusCode != 200) throw Exception('Could not load details (${res.statusCode}).');
-
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
-    return OpportunityDetail.fromJson(body['data'] as Map<String, dynamic>);
+  Never _throwDetailError(DioException error) {
+    final status = error.response?.statusCode;
+    if (error.error is LoginRequired) throw Exception('Please log in again.');
+    if (status == 401) throw Exception('Session expired. Please log in again.');
+    if (status == 404)
+      throw Exception('This opportunity is no longer available.');
+    if (status != null) throw Exception('Could not load details ($status).');
+    throw Exception('Could not connect to the server. Please try again.');
   }
 }
+
+class LoginRequired implements Exception {}
