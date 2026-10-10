@@ -8,16 +8,31 @@ from fastapi.testclient import TestClient
 # firebase_auth_service Firebase credentials ke bina import nahi hota, isliye
 # router import se pehle stub karte hain (real Firebase test = emulator suite).
 _calls = {}
-_stub = types.ModuleType("app.modules.identity.firebase_auth_service")
+_service_name = "app.modules.identity.firebase_auth_service"
+_dependency_name = "app.core.dependencies"
+_previous_service = sys.modules.get(_service_name)
+_previous_dependencies = sys.modules.get(_dependency_name)
+_stub = types.ModuleType(_service_name)
 _stub.verify_firebase_token = lambda t: (
     _calls.setdefault("verify", t) and {"token": "jwt", "user_id": "u1", "role": None}
 )
 _stub.set_user_role = lambda uid, role: {"token": "jwt2", "user_id": uid, "role": role}
 _stub.resolve_firebase_user = lambda t: {"user_id": "u1", "firebase_uid": "f1", "role": None}
-sys.modules["app.modules.identity.firebase_auth_service"] = _stub
-
-from app.core.errors import register_error_handlers  # noqa: E402
-from app.modules.identity import auth_router, me_router  # noqa: E402
+sys.modules[_service_name] = _stub
+try:
+    from app.core.errors import register_error_handlers  # noqa: E402
+    from app.modules.identity import auth_router, me_router  # noqa: E402
+finally:
+    # These routers keep their test stub references, but later application
+    # imports (including the profile tests) must load the real auth service.
+    if _previous_service is None:
+        sys.modules.pop(_service_name, None)
+    else:
+        sys.modules[_service_name] = _previous_service
+    if _previous_dependencies is None:
+        sys.modules.pop(_dependency_name, None)
+    else:
+        sys.modules[_dependency_name] = _previous_dependencies
 
 
 @pytest.fixture()
