@@ -8,6 +8,7 @@ import '../../../../../shared/widgets/sportsz_logo.dart';
 import 'login_screen.dart';
 import 'link_accounts_screen.dart';
 import 'session_expired_screen.dart';
+import '../../../account/presentation/screens/account_screen.dart';
 import '../../../onboarding/presentation/screens/athlete_identity_screen.dart';
 import '../../../profile/presentation/controllers/profile_controller.dart';
 import '../../../profile/presentation/screens/my_profile_screen.dart';
@@ -616,6 +617,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const AthleteIdentityScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // TEMP entry until M2's ST01 Settings hub exists.
+            Container(
+              decoration: _cardDeco(),
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: AppColors.lightGold,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.manage_accounts_outlined,
+                    color: AppColors.gold,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Account (ST02)',
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Sign-in details and account identity',
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: AppColors.textMuted,
+                  size: 14,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AccountScreen(),
                     ),
                   );
                 },
