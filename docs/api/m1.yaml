@@ -1,0 +1,271 @@
+# ============================================================
+# SPORTSZ API CONTRACTS — M1 (IDENTITY, PROFILE & ACCOUNT)
+# Style follows docs/api/p01_athlete_profile.yaml
+# One YAML document per contract, separated by '---'.
+#
+# STATUS: DRAFT. Lines marked TODO(confirm) are NOT from V3 or P01 or the prototype
+# and must be confirmed before code is written.
+# Server-owned fields (always rejected with 422 if sent by client,
+# via Pydantic extra=forbid):
+#   user_id, roles, status, sportsz_id, verification_*, search.*,
+#   created_at, updated_at
+# ============================================================
+
+# ------------------------------------------------------------
+# CONTRACT 1 — GET /v1/me   (ST02 Account, A08 Link accounts)
+# Source of fields: Figma Make prototype, ST02 screen.
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/me
+  auth: Bearer <Firebase ID Token>
+  authorization: Authenticated user (OWN). Identity comes from the token only.
+  owner: M1 (Identity, Profile & Account)
+  screen_id: ST02, A08
+
+description: >
+  Returns the account record shown on ST02 (name, masked sign-in details with
+  verified state, linked providers). The user is resolved strictly from the
+  verified Firebase token; no client-supplied id is accepted.
+  Email and phone are returned MASKED by the server (e.g. r•••@example.com,
+  +91 98••• ••210); the full values are never sent. (Masking is a proposal;
+  the prototype only shows masked values.)
+  Path /me is shared with M2's DELETE /me. M1 owns GET (and later PATCH) in its
+  own router file (me_router.py); M2 owns DELETE in a separate router file.
+
+request:
+  headers:
+    Authorization: { type: string, required: true }
+    X-Request-ID: { type: string, required: false }
+  query_parameters: none
+  body: none
+
+response:
+  envelope:
+    data:
+      user_id: { type: string, description: "server-owned" }
+      full_name: { type: string, nullable: true }        # ST02 header; TODO(confirm) source (users vs athlete_profiles)
+      account_label: { type: string, description: "e.g. 'SportsZ athlete account', derived from roles" }
+      email_masked: { type: string, nullable: true }
+      email_verified: { type: boolean }
+      phone_masked: { type: string, nullable: true }
+      phone_verified: { type: boolean }
+      linked_providers:
+        type: array
+        description: "ST02 'Google: Linked' row; A08. Firebase identity keys that are linked; absent = not linked."
+        items: { type: string, example: "email | phone | google.com" }
+      roles: { type: array, items: string, description: "server-owned, optional for client" }
+      sportsz_id: { type: string, nullable: true, description: "immutable, server-generated" }
+    meta: { request_id: { type: string, nullable: true } }
+
+errors:
+  401_unauthorized: { code: AUTH_REQUIRED, message: "Authentication required" }
+  404_not_found: { code: NOT_FOUND, message: "User record not found" }
+  500_internal_server_error: { code: INTERNAL_SERVER_ERROR, message: "An internal server error occurred" }
+
+collections:
+  primary: [users (M1 owner)]
+  lookup: [athlete_profiles (M1 owner), sports_ids (M1 owner)]
+
+dependencies:
+  - Firebase Admin token verification (M1 auth dependency)
+
+tests_required:
+  - 401 without/invalid token
+  - response never contains full email or full phone
+  - user B cannot read user A (identity only from token)
+
+open_questions:
+  - Email/Phone/Google rows on ST02 show a chevron (>) in the prototype, meaning a detail/manage
+    screen. No such screen is in the 38 M1 screens. Confirm if rows are tappable in Phase 1.
+---
+# ------------------------------------------------------------
+# CONTRACT 2 — PATCH /v1/me   (ST02 Account)   *** DEFERRED ***
+# ------------------------------------------------------------
+contract:
+  method: PATCH
+  endpoint: /v1/me
+  status: DEFERRED
+  owner: M1 (Identity, Profile & Account)
+  screen_id: ST02
+
+description: >
+  Not defined yet. In the prototype ST02 only has a pencil icon next to the name and
+  no edit screen or editable field exists. Do NOT build until the editable fields are
+  decided. Email/phone changes will go through the Firebase re-auth flow, not this route.
+  When defined: Pydantic extra=forbid; reject user_id, roles, status, sportsz_id,
+  verification_*, email, phone.
+---
+# ------------------------------------------------------------
+# CONTRACT 3 — POST /v1/me/sportsz-id/rotate-qr   (I03 QR)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/me/sportsz-id/rotate-qr
+  # V3 matrix prints /me/sportszid/rotate-qr (likely a lost hyphen in the PDF);
+  # this matches the existing GET /v1/me/sportsz-id.
+  auth: Bearer <Firebase ID Token>
+  authorization: Authenticated Athlete Only (role == 'athlete'), OWN
+  owner: M1 (Identity, Profile & Account)
+  screen_id: I03
+
+description: >
+  Rotates the QR token of the authenticated athlete. The sportsz_id itself is
+  immutable and never changes. The previous QR token becomes invalid immediately.
+
+request:
+  headers:
+    Authorization: { type: string, required: true }
+  body: none
+
+response:
+  envelope:
+    data:
+      sportsz_id: { type: string }
+      qr_token: { type: string, description: "new token; old one invalid" }
+      qr_rotated_at: { type: string, format: date-time }
+    meta: { request_id: { type: string, nullable: true } }
+
+errors:
+  401_unauthorized: { code: AUTH_REQUIRED, message: "Authentication required" }
+  403_forbidden: { code: FORBIDDEN, message: "Athlete role is required for this resource" }
+  404_not_found: { code: NOT_FOUND, message: "SportsZ ID has not been issued yet" }
+  429_too_many_requests: { code: RATE_LIMITED, message: "Too many requests" }   # TODO(confirm) limit with M4
+  500_internal_server_error: { code: INTERNAL_SERVER_ERROR, message: "An internal server error occurred" }
+
+collections:
+  primary: [sports_ids (M1 owner)]
+
+dependencies:
+  - M4: rate limiting (app/core/ratelimit)
+
+tests_required:
+  - old qr_token rejected after rotate
+  - athlete B cannot rotate athlete A's token
+
+---
+# ------------------------------------------------------------
+# CONTRACT 4 — PATCH /v1/me/profile/athlete/privacy
+#              (O09, I04, PR02, PR03, PR05)
+# ------------------------------------------------------------
+contract:
+  method: PATCH
+  endpoint: /v1/me/profile/athlete/privacy
+  auth: Bearer <Firebase ID Token>
+  authorization: Authenticated Athlete Only (role == 'athlete'), OWN
+  owner: M1 (Identity, Profile & Account)
+  screen_id: O09, I04, PR02, PR03, PR05
+
+description: >
+  Partial update of the athlete's privacy settings. Uses the same privacy
+  shape that P01 already returns (discoverable, contact_policy, field_overrides).
+  Every key and value is validated against M4's /me/privacy/schema.
+  Default-deny: a missing setting means the most private option.
+
+request:
+  headers:
+    Authorization: { type: string, required: true }
+  body:
+    additional_properties: false          # extra=forbid
+    min_properties: 1
+    properties:
+      discoverable: { type: boolean }                      # PR02
+      contact_policy: { type: string }                     # PR05, allowed values from M4 schema
+      field_overrides: { type: object }                    # PR03 (and I04?), keys/values from M4 schema
+    # TODO(confirm): does I04 (ID page settings) use field_overrides keys or a new
+    # key such as id_page? Decide with M4 before coding.
+
+response:
+  envelope:
+    data:
+      privacy:
+        discoverable: { type: boolean }
+        contact_policy: { type: string, nullable: true }
+        field_overrides: { type: object }
+    meta: { request_id: { type: string, nullable: true } }
+
+errors:
+  401_unauthorized: { code: AUTH_REQUIRED, message: "Authentication required" }
+  403_forbidden: { code: FORBIDDEN, message: "Athlete role is required for this resource" }
+  404_not_found: { code: NOT_FOUND, message: "Athlete profile has not been created yet" }
+  422_unprocessable_entity: { code: VALIDATION_ERROR, message: "Request validation failed", details: array }
+  500_internal_server_error: { code: INTERNAL_SERVER_ERROR, message: "An internal server error occurred" }
+
+collections:
+  primary: [athlete_profiles (M1 owner)]
+
+dependencies:
+  - "M4: GET /me/privacy/schema (blocks O09, PR02, PR03, PR05; confirm with M4 before coding)"
+  - "M3 (via M2 job enqueue): a change to discoverable triggers a search rebuild (PR02). M1 never writes athlete_profiles.search.* itself."
+
+---
+# ------------------------------------------------------------
+# CONTRACT 5 — GET /v1/id/{sportsz_id}   (I04 public ID page)
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/id/{sportsz_id}
+  auth: none (public page)
+  authorization: PUB (strict public field whitelist)
+  owner: M1 (Identity, Profile & Account)
+  screen_id: I04
+
+description: >
+  Public SportsZ ID page. Returns ONLY whitelisted fields, and each optional
+  field only if the owner's ID-page setting (I04) allows it. The sportsz_id
+  format and check character are validated BEFORE any database lookup.
+
+request:
+  path_parameters:
+    sportsz_id: { type: string, required: true }
+  query_parameters: none
+  body: none
+
+response:
+  envelope:
+    data:                                   # WHITELIST: nothing outside this list is ever returned
+      sportsz_id: { type: string }
+      # From the I04 prototype ("Visible information"): Full name, Primary sport,
+      # Playing role, Age category, Verification status. Plus photo toggle.
+      # Each field is returned only if the owner's I04 setting allows it.
+      full_name: { type: string, nullable: true }
+      photo_url: { type: string, nullable: true }       # "Show profile photo" toggle
+      primary_sport: { type: string, nullable: true }   # sport_name of is_primary sport
+      playing_role: { type: string, nullable: true }    # TODO(confirm) maps to sports[].positions
+      age_category: { type: string, nullable: true }    # category only, NEVER date_of_birth; hidden by default in prototype
+      verified: { type: boolean }                       # badge only, no documents or details
+    meta: { request_id: { type: string, nullable: true } }
+
+errors:
+  404_not_found:
+    code: NOT_FOUND
+    message: "Not found"
+    description: >
+      IDENTICAL response (status and body shape) for: malformed id, unknown id,
+      page disabled by owner, hidden/blocked. Never 403.
+  429_too_many_requests: { code: RATE_LIMITED, message: "Too many requests" }
+  500_internal_server_error: { code: INTERNAL_SERVER_ERROR, message: "An internal server error occurred" }
+
+collections:
+  primary: [sports_ids (M1 owner), athlete_profiles (M1 owner)]
+  lookup: [sports (M1 owner)]
+
+dependencies:
+  - M4: rate limiting
+
+tests_required:
+  - snapshot test of the exact response keys (fails if any key is added)
+  - enumeration test: unknown id and disabled page return identical status and body shape
+  - check-character test: malformed id is rejected without a DB query
+  - never returns: date_of_birth, phone, email, roles, status, verification_*, search.*, documents
+
+---
+# ------------------------------------------------------------
+# NOTE — I02 Share (no API)
+# ------------------------------------------------------------
+screen_note:
+  screen_id: I02
+  api: none
+  description: >
+    Client-only share sheet using data from GET /v1/me/sportsz-id (I01).
+    The shared link or QR points to the public page GET /v1/id/{sportsz_id}.
