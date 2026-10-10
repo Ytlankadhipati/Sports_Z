@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sports_z/features/opportunities/presentation/controllers/opportunities_controller.dart';
 import 'package:sports_z/features/opportunities/data/models/opportunity.dart';
+import 'package:sports_z/features/opportunities/presentation/screens/opportunity_detail_screen.dart';
+import 'package:sports_z/features/opportunities/presentation/controllers/opportunities_controller.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _bgTop = AppColors.mustard900;
@@ -28,20 +29,18 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
   };
 
   final _scroll = ScrollController();
-  String? _type;
 
   @override
   void initState() {
     super.initState();
+    ref.read(opportunitiesControllerProvider.notifier).load(status: 'open');
     _scroll.addListener(() {
       if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-        ref
-            .read(opportunitiesControllerProvider.notifier)
-            .loadMore(type: _type, status: 'open');
+        ref.read(opportunitiesControllerProvider.notifier).loadMore(
+          status: 'open',
+          type: ref.read(opportunityTypeProvider),
+        );
       }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _load();
     });
   }
 
@@ -51,19 +50,25 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
     super.dispose();
   }
 
-  Future<void> _load() => ref
-      .read(opportunitiesControllerProvider.notifier)
-      .load(type: _type, status: 'open');
-
   void _setType(String? type) {
-    if (type == _type) return;
-    setState(() => _type = type);
-    _load();
+    ref.read(opportunityTypeProvider.notifier).select(type);
+    ref.read(opportunitiesControllerProvider.notifier).load(
+      status: 'open',
+      type: type,
+    );
+  }
+
+  void _openDetail(Opportunity item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            OpportunityDetailScreen(publicId: item.publicId, preview: item),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final feed = ref.watch(opportunitiesControllerProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -93,14 +98,14 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
                         padding: const EdgeInsets.only(right: 8),
                         child: _FilterPill(
                           label: e.value,
-                          selected: _type == e.key,
+                          selected: ref.watch(opportunityTypeProvider) == e.key,
                           onTap: () => _setType(e.key),
                         ),
                       ),
                   ],
                 ),
               ),
-              Expanded(child: _body(feed)),
+              Expanded(child: _body()),
             ],
           ),
         ),
@@ -108,9 +113,13 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
     );
   }
 
-  Widget _body(OpportunitiesFeedState feed) {
-    if (feed.isLoading) return const Center(child: CircularProgressIndicator());
-    if (feed.errorMessage != null) {
+  Widget _body() {
+    final opportunities = ref.watch(opportunitiesControllerProvider);
+    if (opportunities.isLoading && opportunities.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (opportunities.errorMessage != null && opportunities.items.isEmpty) {
+      final message = opportunities.errorMessage!;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -118,43 +127,68 @@ class _OpportunitiesScreenState extends ConsumerState<OpportunitiesScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                feed.errorMessage!,
+                message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
+              ElevatedButton(
+                onPressed: () =>
+                    ref.read(opportunitiesControllerProvider.notifier).refresh(
+                      status: 'open',
+                      type: ref.read(opportunityTypeProvider),
+                    ),
+                child: const Text('Retry'),
+              ),
             ],
           ),
         ),
       );
     }
-    if (feed.items.isEmpty) {
-      return const Center(
-        child: Text(
-          'No opportunities found',
-          style: TextStyle(color: Colors.white70),
+    final data = opportunities;
+    if (data.items.isEmpty) {
+      return RefreshIndicator(
+        color: AppColors.gold,
+        onRefresh: () => ref.read(opportunitiesControllerProvider.notifier).refresh(
+          status: 'open',
+          type: ref.read(opportunityTypeProvider),
+        ),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 180),
+            Center(
+              child: Text(
+                'No opportunities found',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
         ),
       );
     }
     return RefreshIndicator(
       color: AppColors.gold,
       backgroundColor: AppColors.mustard800,
-      onRefresh: _load,
+      onRefresh: () => ref.read(opportunitiesControllerProvider.notifier).refresh(
+        status: 'open',
+        type: ref.read(opportunityTypeProvider),
+      ),
       child: ListView.separated(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        itemCount: feed.items.length + (feed.isLoadingMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 14),
+        itemCount: data.items.length + (data.isLoadingMore ? 1 : 0),
+        separatorBuilder: (_, _) => const SizedBox(height: 14),
         itemBuilder: (_, i) {
-          if (i >= feed.items.length) {
+          if (i >= data.items.length) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             );
           }
-          return _OpportunityCard(item: feed.items[i]);
+          final item = data.items[i];
+          return _OpportunityCard(item: item, onTap: () => _openDetail(item));
         },
       ),
     );
@@ -178,7 +212,7 @@ class _Header extends StatelessWidget {
             'assets/images/splash_bg.jpg',
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
-            errorBuilder: (_, __, ___) => const DecoratedBox(
+            errorBuilder: (_, _, _) => const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -319,8 +353,9 @@ class _Tag extends StatelessWidget {
 }
 
 class _OpportunityCard extends StatelessWidget {
-  const _OpportunityCard({required this.item});
+  const _OpportunityCard({required this.item, required this.onTap});
   final Opportunity item;
+  final VoidCallback onTap;
 
   String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
@@ -347,86 +382,98 @@ class _OpportunityCard extends StatelessWidget {
         ? 'Apply by ${formatDate(deadline)}'
         : 'Closed on ${formatDate(deadline)}';
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.mustard500, AppColors.mustard700],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.mustard500, AppColors.mustard700],
+                    ),
+                  ),
+                  child: Icon(
+                    _icon(item.sportId),
+                    color: Colors.white,
+                    size: 26,
                   ),
                 ),
-                child: Icon(_icon(item.sportId), color: Colors.white, size: 26),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${item.organizationName} • ${item.location}',
-                      style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 13,
+                      const SizedBox(height: 4),
+                      Text(
+                        '${item.organizationName} • ${item.location}',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _Tag(text: _cap(item.type), color: AppColors.mustard300),
-              const SizedBox(width: 8),
-              _Tag(
-                text: open ? 'Open' : 'Closed',
-                color: open ? _okColor : _badColor,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Divider(height: 1, color: Colors.white.withValues(alpha: 0.1)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.schedule, size: 16, color: AppColors.goldBright),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  deadlineText,
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                _Tag(text: _cap(item.type), color: AppColors.mustard300),
+                const SizedBox(width: 8),
+                _Tag(
+                  text: open ? 'Open' : 'Closed',
+                  color: open ? _okColor : _badColor,
                 ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.white38),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 14),
+            Divider(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(
+                  Icons.schedule,
+                  size: 16,
+                  color: AppColors.goldBright,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    deadlineText,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.white38),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

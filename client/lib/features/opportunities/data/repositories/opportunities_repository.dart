@@ -18,12 +18,12 @@ class OpportunitiesRepository {
       queryParameters: {
         'status': status,
         'limit': limit,
-        if (type != null) 'type': type,
-        if (cursor != null) 'cursor': cursor,
+        'type': ?type,
+        'cursor': ?cursor,
       },
     );
     final body = response.data;
-    if (body is! Map || body['data'] is! List || body['meta'] is! Map) {
+    if (body is! Map || body['data'] is! List) {
       throw const FormatException('Invalid opportunities response');
     }
     final items = (body['data'] as List)
@@ -32,7 +32,22 @@ class OpportunitiesRepository {
         .toList();
     return OpportunityPage(
       items,
-      (body['meta'] as Map)['next_cursor'] as String?,
+      body['meta'] is Map
+          ? (body['meta'] as Map)['next_cursor'] as String?
+          : null,
     );
   }
+
+  Future<OpportunityDetail> getById(String publicId) async {
+    final response = await _dio.get<Object?>(
+      '/opportunities/${Uri.encodeComponent(publicId)}',
+    );
+    final data = _data(response.data);
+    if (data is! Map) {
+      throw const FormatException('Invalid opportunity response');
+    }
+    return OpportunityDetail.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Object? _data(Object? body) => body is Map ? body['data'] : null;
 }

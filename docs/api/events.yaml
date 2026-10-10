@@ -1,0 +1,138 @@
+module: Events
+owner: M3
+base_path: /v1
+conventions:
+  success_envelope:
+    data: response payload
+    meta:
+      next_cursor: string or null
+      request_id: string
+  error_envelope:
+    error:
+      code: string
+      message: string
+      details: list
+      request_id: string or null
+  authentication: "Firebase ID token in Authorization: Bearer <token>"
+  authorization: athlete role required
+  pagination: cursor-based; limit is 1..50, default 20
+
+endpoints:
+  - method: GET
+    endpoint: /v1/events
+    auth: required
+    authorization: current user must be an athlete
+    request:
+      query:
+        sport_id: optional string
+        status: optional upcoming|ongoing|completed, default upcoming
+        limit: optional integer, default 20, range 1..50
+        cursor: optional opaque cursor
+    response:
+      data: list of EventSummary
+      meta: next_cursor and request_id
+      EventSummary:
+        public_id: string
+        title: string
+        sport_id: string
+        location: string
+        starts_at: UTC datetime
+        registration_deadline: UTC datetime or null
+        seats_left: integer
+        status: string
+        registration_state: not_registered|registered|waitlisted
+    errors:
+      401: AUTH_REQUIRED
+      403: FORBIDDEN
+      422: VALIDATION_ERROR or INVALID_CURSOR
+    collection: events; current user's rows from event_registrations
+    owner: M3
+    dependencies: Firebase auth, athlete role, MongoDB; EligibilityService not used
+
+  - method: GET
+    endpoint: /v1/events/{public_id}
+    auth: required
+    authorization: current user must be an athlete
+    request:
+      path:
+        public_id: event public identifier
+    response:
+      data: EventDetail, including EventSummary fields, description, capacity and current user's is_saved boolean
+      meta: request_id
+    errors:
+      401: AUTH_REQUIRED
+      403: FORBIDDEN
+      404: NOT_FOUND
+    collection: events; current user's event_registrations row for registration_state
+    owner: M3
+    dependencies: Firebase auth, athlete role, MongoDB
+
+  - method: POST
+    endpoint: /v1/events/{public_id}/register
+    auth: required
+    authorization: current user must be an athlete; user_id comes only from the verified token
+    request:
+      path:
+        public_id: event public identifier
+      body: empty object or omitted
+    response:
+      data:
+        event_public_id: string
+        status: registered|waitlisted
+        created_at: UTC datetime
+      meta: request_id
+    errors:
+      401: AUTH_REQUIRED
+      403: FORBIDDEN
+      404: NOT_FOUND
+      409: DUPLICATE_REGISTRATION, EVENT_CLOSED, REGISTRATION_DEADLINE_PASSED, REGISTRATION_CHANGED
+    collection: events and event_registrations
+    owner: M3
+    dependencies: Firebase auth, athlete role, unique event/user index, atomic event capacity update
+
+  - method: DELETE
+    endpoint: /v1/events/{public_id}/register
+    auth: required
+    authorization: current user must be an athlete; lookup includes event_id and current user_id
+    request:
+      path:
+        public_id: event public identifier
+      body: none
+    response:
+      data:
+        cancelled: true
+      meta: request_id
+    errors:
+      401: AUTH_REQUIRED
+      403: FORBIDDEN
+      404: NOT_FOUND or REGISTRATION_NOT_FOUND
+      409: CANCELLATION_IN_PROGRESS, REGISTRATION_COUNT_CONFLICT, CANCELLATION_CONFLICT
+    collection: events and event_registrations
+    owner: M3
+    dependencies: Firebase auth, athlete role; registered_count or waitlist_count is decremented atomically
+
+  - method: GET
+    endpoint: /v1/me/event-registrations
+    auth: required
+    authorization: current user must be an athlete; query always filters by current user_id
+    request:
+      query:
+        limit: optional integer, default 20, range 1..50
+        cursor: optional Mongo ObjectId cursor
+    response:
+      data: list of MyEventRegistration
+      meta: next_cursor and request_id
+      MyEventRegistration:
+        event_public_id: string
+        title: string
+        starts_at: UTC datetime
+        location: string
+        registration_status: registered|waitlisted
+        created_at: UTC datetime
+    errors:
+      401: AUTH_REQUIRED
+      403: FORBIDDEN
+      422: VALIDATION_ERROR or INVALID_CURSOR
+    collection: event_registrations and events
+    owner: M3
+    dependencies: Firebase auth, athlete role, user-scoped MongoDB query

@@ -1,0 +1,31 @@
+module: Opportunities
+owner: M3
+base_path: /v1/opportunities
+authentication: Firebase ID token in Authorization: Bearer <token>
+success_envelope:
+  data: response payload
+  meta:
+    next_cursor: string or null
+    request_id: string
+error_envelope:
+  error:
+    code: string
+    message: string
+    details: list
+    request_id: string or null
+endpoints:
+  - method: GET
+    path: /v1/opportunities
+    query:
+      sport_id: optional string
+      type: optional trial|scholarship|job|camp
+      status: open|closed, default open
+      limit: 1..50, default 20
+      cursor: optional ObjectId cursor
+    response: paginated list of OpportunitySummary; list order uses ascending _id
+  - method: GET
+    path: /v1/opportunities/{public_id}
+    response:
+      data: OpportunityDetail
+      OpportunityDetail: public_id, title, type, sport_id, organization_name, location, deadline, status, description, eligibility_summary, is_saved
+    is_saved: boolean computed for the authenticated user

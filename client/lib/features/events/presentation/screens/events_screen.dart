@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sports_z/features/events/presentation/controllers/events_controller.dart';
 import 'package:sports_z/features/events/data/models/event.dart';
+import 'package:sports_z/features/events/presentation/screens/event_detail_screen.dart';
+import 'package:sports_z/features/events/presentation/screens/my_registrations_screen.dart';
+import 'package:sports_z/features/events/presentation/controllers/events_controller.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
 const _bgTop = AppColors.mustard900;
@@ -25,18 +27,19 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
   };
 
   final _scroll = ScrollController();
-  String _status = 'upcoming';
 
   @override
   void initState() {
     super.initState();
+    ref.read(eventsControllerProvider.notifier).load(
+      status: ref.read(eventStatusProvider),
+    );
     _scroll.addListener(() {
       if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
-        ref.read(eventsControllerProvider.notifier).loadMore(status: _status);
+        ref.read(eventsControllerProvider.notifier).loadMore(
+          status: ref.read(eventStatusProvider),
+        );
       }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _load();
     });
   }
 
@@ -46,18 +49,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     super.dispose();
   }
 
-  Future<void> _load() =>
-      ref.read(eventsControllerProvider.notifier).load(status: _status);
-
   void _setStatus(String status) {
-    if (status == _status) return;
-    setState(() => _status = status);
-    _load();
+    ref.read(eventStatusProvider.notifier).select(status);
+    ref.read(eventsControllerProvider.notifier).load(status: status);
   }
 
   @override
   Widget build(BuildContext context) {
-    final feed = ref.watch(eventsControllerProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -72,9 +70,14 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
           ),
           child: Column(
             children: [
-              const _Header(
+              _Header(
                 title: 'Events',
                 tagline: 'PLAY  •  COMPETE  •  GROW',
+                onMyRegistrations: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MyRegistrationsScreen(),
+                  ),
+                ),
               ),
               SizedBox(
                 height: 58,
@@ -87,14 +90,14 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                         padding: const EdgeInsets.only(right: 8),
                         child: _FilterPill(
                           label: e.value,
-                          selected: _status == e.key,
+                          selected: ref.watch(eventStatusProvider) == e.key,
                           onTap: () => _setStatus(e.key),
                         ),
                       ),
                   ],
                 ),
               ),
-              Expanded(child: _body(feed)),
+              Expanded(child: _body()),
             ],
           ),
         ),
@@ -102,9 +105,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     );
   }
 
-  Widget _body(EventsFeedState feed) {
-    if (feed.isLoading) return const Center(child: CircularProgressIndicator());
-    if (feed.errorMessage != null) {
+  Widget _body() {
+    final events = ref.watch(eventsControllerProvider);
+    if (events.isLoading && events.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (events.errorMessage != null && events.items.isEmpty) {
+      final message = events.errorMessage!;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -112,40 +119,67 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                feed.errorMessage!,
+                message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
+              ElevatedButton(
+                onPressed: () =>
+                    ref.read(eventsControllerProvider.notifier).refresh(
+                      status: ref.read(eventStatusProvider),
+                    ),
+                child: const Text('Retry'),
+              ),
             ],
           ),
         ),
       );
     }
-    if (feed.items.isEmpty) {
-      return const Center(
-        child: Text('No events found', style: TextStyle(color: Colors.white70)),
+    final data = events;
+    if (data.items.isEmpty) {
+      return RefreshIndicator(
+        color: AppColors.gold,
+        onRefresh: () => ref.read(eventsControllerProvider.notifier).refresh(
+          status: ref.read(eventStatusProvider),
+        ),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 180),
+            Center(
+              child: Text('No events found', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
+        ),
       );
     }
     return RefreshIndicator(
       color: AppColors.gold,
       backgroundColor: AppColors.mustard800,
-      onRefresh: _load,
+      onRefresh: () => ref.read(eventsControllerProvider.notifier).refresh(
+        status: ref.read(eventStatusProvider),
+      ),
       child: ListView.separated(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        itemCount: feed.items.length + (feed.isLoadingMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 14),
+        itemCount: data.items.length + (data.isLoadingMore ? 1 : 0),
+        separatorBuilder: (_, _) => const SizedBox(height: 14),
         itemBuilder: (_, i) {
-          if (i >= feed.items.length) {
+          if (i >= data.items.length) {
             return const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             );
           }
-          return _EventCard(item: feed.items[i]);
+          final item = data.items[i];
+          return _EventCard(
+            item: item,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => EventDetailScreen(event: item)),
+            ),
+          );
         },
       ),
     );
@@ -153,9 +187,14 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.title, required this.tagline});
+  const _Header({
+    required this.title,
+    required this.tagline,
+    this.onMyRegistrations,
+  });
   final String title;
   final String tagline;
+  final VoidCallback? onMyRegistrations;
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +208,7 @@ class _Header extends StatelessWidget {
             'assets/images/splash_bg.jpg',
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
-            errorBuilder: (_, __, ___) => const DecoratedBox(
+            errorBuilder: (_, _, _) => const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -195,6 +234,19 @@ class _Header extends StatelessWidget {
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+          if (onMyRegistrations != null)
+            Positioned(
+              top: top + 4,
+              right: 8,
+              child: IconButton(
+                tooltip: 'My registrations',
+                icon: const Icon(
+                  Icons.confirmation_number_outlined,
+                  color: Colors.white,
+                ),
+                onPressed: onMyRegistrations,
               ),
             ),
           Positioned(
@@ -310,8 +362,9 @@ class _Tag extends StatelessWidget {
 }
 
 class _EventCard extends StatelessWidget {
-  const _EventCard({required this.item});
+  const _EventCard({required this.item, required this.onTap});
   final SportEvent item;
+  final VoidCallback onTap;
 
   static const _months = [
     'JAN',
@@ -337,127 +390,135 @@ class _EventCard extends StatelessWidget {
     final showSeats = item.status == 'upcoming';
     final seatColor = item.isFull ? _badColor : _okColor;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 56,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.mustard500, AppColors.mustard700],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 56,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.mustard500, AppColors.mustard700],
+                    ),
                   ),
-                ),
-                child: starts == null
-                    ? const Icon(Icons.event, color: Colors.white, size: 26)
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${starts.day}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
+                  child: starts == null
+                      ? const Icon(Icons.event, color: Colors.white, size: 26)
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${starts.day}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
+                            Text(
+                              _months[starts.month - 1],
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.place_outlined,
+                            size: 15,
+                            color: Colors.white60,
                           ),
-                          Text(
-                            _months[starts.month - 1],
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1,
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              item.location,
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
                       ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.place_outlined,
-                          size: 15,
-                          color: Colors.white60,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            item.location,
-                            style: const TextStyle(
-                              color: Colors.white60,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _Tag(text: _cap(item.sportId), color: AppColors.mustard300),
-              if (showSeats) ...[
-                const SizedBox(width: 8),
-                _Tag(
-                  text: item.isFull ? 'Full' : '${item.seatsLeft} seats left',
-                  color: seatColor,
+                    ],
+                  ),
                 ),
               ],
-            ],
-          ),
-          const SizedBox(height: 14),
-          Divider(height: 1, color: Colors.white.withValues(alpha: 0.1)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(Icons.schedule, size: 16, color: AppColors.goldBright),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  showSeats && deadline != null
-                      ? 'Register by ${formatEventDate(deadline)}'
-                      : starts != null
-                      ? formatEventDate(starts)
-                      : '',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                _Tag(text: _cap(item.sportId), color: AppColors.mustard300),
+                if (showSeats) ...[
+                  const SizedBox(width: 8),
+                  _Tag(
+                    text: item.isFull ? 'Full' : '${item.seatsLeft} seats left',
+                    color: seatColor,
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 14),
+            Divider(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(
+                  Icons.schedule,
+                  size: 16,
+                  color: AppColors.goldBright,
                 ),
-              ),
-              const Icon(Icons.chevron_right, color: Colors.white38),
-            ],
-          ),
-        ],
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    showSeats && deadline != null
+                        ? 'Register by ${formatEventDate(deadline)}'
+                        : starts != null
+                        ? formatEventDate(starts)
+                        : '',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.white38),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

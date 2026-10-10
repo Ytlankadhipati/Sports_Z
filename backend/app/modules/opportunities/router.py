@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core.dependencies import get_current_user
 from app.modules.opportunities import service
+from app.modules.discovery import service as saved_service
 from app.modules.opportunities.repository import InvalidCursor
 from app.modules.opportunities.schemas import (
     OpportunityDetailResponse,
@@ -43,7 +44,10 @@ def get_opportunity(
     request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    item = service.get_opportunity(public_id)
+    item = service.get_opportunity(
+        public_id,
+        saved_service.is_saved(current_user["user_id"], "opportunity", public_id),
+    )
     if item is None:
         raise _error(404, "NOT_FOUND", "Opportunity not found")
     return {"data": item, "meta": {"next_cursor": None, "request_id": request.state.request_id}}
