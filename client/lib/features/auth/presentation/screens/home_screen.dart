@@ -42,17 +42,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           onViewId: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const SportsZIdScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const SportsZIdScreen()),
             );
           },
           onEditProfile: () async {
             await Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => const EditHubScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const EditHubScreen()),
             );
             if (mounted) {
               ref.read(profileControllerProvider.notifier).loadProfile();
@@ -263,9 +259,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final name = (fullName != null && fullName.isNotEmpty)
         ? fullName.toUpperCase()
         : (((user?.displayName?.isNotEmpty ?? false)
-                ? user!.displayName!
-                : (user?.email?.split('@').first ?? 'Athlete'))
-            .toUpperCase());
+                  ? user!.displayName!
+                  : (user?.email?.split('@').first ?? 'Athlete'))
+              .toUpperCase());
     final sportszId = (profile?['sportsz_id'] as String?)?.trim();
 
     return Scaffold(
@@ -430,41 +426,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                     Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF81C784)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.verified,
-                          size: 14,
-                          color: Color(0xFF2E7D32),
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Verified',
-                          style: TextStyle(
-                            fontFamily: AppTypography.fontFamily,
-                            fontSize: 12,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF81C784)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.verified,
+                            size: 14,
                             color: Color(0xFF2E7D32),
-                            fontWeight: FontWeight.w600,
                           ),
-                        ),
-                      ],
+                          SizedBox(width: 4),
+                          Text(
+                            'Verified',
+                            style: TextStyle(
+                              fontFamily: AppTypography.fontFamily,
+                              fontSize: 12,
+                              color: Color(0xFF2E7D32),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
             // Statistics Grid (2x2)
             Row(
@@ -693,12 +689,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             _navItem(0, Icons.home_outlined, 'Home'),
             _navItem(1, Icons.bar_chart, 'Performance'),
             _navItem(2, Icons.upload_outlined, 'Upload'),
-            _navItem(
-              3,
-              Icons.person_outline,
-              'Profile',
-              onTap: _openProfile,
-            ),
+            _navItem(3, Icons.person_outline, 'Profile', onTap: _openProfile),
           ],
         ),
       ),

@@ -20,21 +20,18 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen<AsyncValue<void>>(
-      unauthorizedEventsProvider,
-      (_, next) {
-        if (next is AsyncData) {
-          rootNavigatorKey.currentState?.pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (_) => const SessionExpiredScreen(
-                reason: 'Your session has expired. Please sign in again.',
-              ),
+    ref.listen<AsyncValue<void>>(unauthorizedEventsProvider, (_, next) {
+      if (next is AsyncData) {
+        rootNavigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => const SessionExpiredScreen(
+              reason: 'Your session has expired. Please sign in again.',
             ),
-            (route) => false,
-          );
-        }
-      },
-    );
+          ),
+          (route) => false,
+        );
+      }
+    });
 
     return MaterialApp(
       navigatorKey: rootNavigatorKey,

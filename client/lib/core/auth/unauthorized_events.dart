@@ -34,7 +34,7 @@ class UnauthorizedEvents {
   /// originating from auth-handshake paths are silently ignored.
   void signal401(String path) {
     if (_authPathMatches(path)) return; // Do not trigger for auth endpoints
-    if (_signalled) return;            // Already fired; suppress duplicates
+    if (_signalled) return; // Already fired; suppress duplicates
     _signalled = true;
     _controller.add(null);
   }
