@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -213,25 +214,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             left: 22,
                             child: SportsZLogo(size: 24, showTagline: true),
                           ),
-                          Positioned(
-                            top: 12,
-                            right: 8,
-                            child: TextButton(
-                              onPressed: () => Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const HomeScreen(),
+                          // Debug-only: allows engineers to bypass login.
+                          // Not rendered in release builds.
+                          if (kDebugMode)
+                            Positioned(
+                              top: 12,
+                              right: 8,
+                              child: TextButton(
+                                onPressed: () => Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const HomeScreen(),
+                                  ),
                                 ),
-                              ),
-                              child: const Text(
-                                'Skip',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
+                                child: const Text(
+                                  'Skip',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
                           Positioned(
                             left: 22,
                             bottom: 44,

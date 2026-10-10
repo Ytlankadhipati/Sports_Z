@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import client, ensure_indexes
 from app.core.errors import register_error_handlers
 from app.modules.identity import auth_router
+from app.modules.identity import me_router
 from app.modules.identity import profile_router
 from app.modules.identity import sports_router
 from app.modules.identity import organizations_router
@@ -52,6 +53,7 @@ async def request_id_middleware(request: Request, call_next):
 
 
 app.include_router(auth_router.router)
+app.include_router(me_router.router)
 app.include_router(profile_router.router)
 app.include_router(sports_router.router)
 app.include_router(organizations_router.router)

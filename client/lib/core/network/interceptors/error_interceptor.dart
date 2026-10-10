@@ -4,6 +4,13 @@ import 'package:flutter/foundation.dart';
 import '../api_exception.dart';
 
 class ErrorInterceptor extends Interceptor {
+  /// Optional callback invoked when a request's final response (after any
+  /// upstream retry by [AuthInterceptor]) is HTTP 401.  The [path] of the
+  /// failing request is forwarded so callers can filter auth-handshake paths.
+  const ErrorInterceptor({this.onUnauthorized});
+
+  final void Function(String path)? onUnauthorized;
+
   @override
   void onResponse(
     Response<dynamic> response,
@@ -27,6 +34,9 @@ class ErrorInterceptor extends Interceptor {
         '${err.requestOptions.path} failed '
         'status=${err.response?.statusCode ?? 'none'} type=${err.type.name}',
       );
+    }
+    if (err.response?.statusCode == 401) {
+      onUnauthorized?.call(err.requestOptions.path);
     }
     handler.reject(
       DioException(
