@@ -1,22 +1,25 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../shared/theme/app_theme.dart';
 import '../../../../../shared/widgets/sportsz_logo.dart';
 import '../../data/datasources/auth_service.dart';
+import '../controllers/auth_controller.dart';
 import 'role_selection_screen.dart';
 import 'login_screen.dart';
 
-class EmailVerificationScreen extends StatefulWidget {
+class EmailVerificationScreen extends ConsumerStatefulWidget {
   const EmailVerificationScreen({super.key});
 
   @override
-  State<EmailVerificationScreen> createState() =>
+  ConsumerState<EmailVerificationScreen> createState() =>
       _EmailVerificationScreenState();
 }
 
-class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
+class _EmailVerificationScreenState
+    extends ConsumerState<EmailVerificationScreen> {
   final AuthService _authService = AuthService();
   bool _isChecking = false;
   bool _isResending = false;
@@ -61,14 +64,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     _autoCheckTimer?.cancel();
     setState(() => _isChecking = true);
 
-    final backendData = await _authService.verifyWithBackend();
+    final backendData = await ref
+        .read(authControllerProvider.notifier)
+        .verifyWithBackend();
     if (!mounted) return;
 
     if (backendData == null) {
       setState(() {
         _isChecking = false;
-        _message =
-            'Server se connect nahi ho paya. Backend chal raha hai check karo.';
+        _message = ref.read(authControllerProvider).errorMessage ?? 'Could not verify your SportsZ account. Check your connection and retry.';
       });
       // dobara retry loop shuru karo
       _autoCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -110,6 +114,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final apiLoading = ref.watch(authControllerProvider).isLoading;
     final email = _authService.currentUser?.email ?? '';
 
     return Scaffold(
@@ -120,7 +125,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SportsZLogo(size: 28, taglineColor: AppColors.textSecondary),
+              const SportsZLogo(
+                size: 28,
+                taglineColor: AppColors.textSecondary,
+              ),
               const SizedBox(height: 40),
               Container(
                 width: 90,
@@ -169,7 +177,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
               if (_message != null) ...[
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: _message!.contains('sent again')
                         ? AppColors.lightGold
@@ -201,7 +212,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _isChecking ? null : () => _checkVerification(),
+                  onPressed: _isChecking || apiLoading
+                      ? null
+                      : () => _checkVerification(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.gold,
                     foregroundColor: Colors.white,
@@ -209,7 +222,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: _isChecking
+                  child: _isChecking || apiLoading
                       ? const SizedBox(
                           height: 20,
                           width: 20,

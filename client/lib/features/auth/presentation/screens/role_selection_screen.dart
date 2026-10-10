@@ -1,24 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../shared/theme/app_theme.dart';
-import '../../data/datasources/auth_service.dart';
+import '../controllers/auth_controller.dart';
 import '../../../../../shared/widgets/sportsz_logo.dart';
 import '../../../../../shared/widgets/sportsz_ui.dart';
 import 'home_screen.dart';
+import 'login_screen.dart';
 import '../../../onboarding/presentation/screens/athlete_identity_screen.dart';
 
-class RoleSelectionScreen extends StatefulWidget {
+class RoleSelectionScreen extends ConsumerStatefulWidget {
   const RoleSelectionScreen({super.key});
 
   @override
-  State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
+  ConsumerState<RoleSelectionScreen> createState() =>
+      _RoleSelectionScreenState();
 }
 
-class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
-  final AuthService _authService = AuthService();
+class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
   String? _selectedRole = 'athlete'; // design mein Athlete pehle se selected
   bool _isLoading = false;
   String? _errorMessage;
+
+  void _goBack() {
+    if (!mounted || _isLoading || ref.read(authControllerProvider).isLoading) {
+      return;
+    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+  }
 
   final List<Map<String, dynamic>> _roles = [
     {
@@ -54,14 +66,17 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
       _errorMessage = null;
     });
 
-    final data = await _authService.selectRoleOnBackend(_selectedRole!);
+    final data = await ref
+        .read(authControllerProvider.notifier)
+        .selectRole(_selectedRole!);
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (data == null) {
       setState(
         () => _errorMessage =
-            'Role save nahi hua. Backend chal raha hai check karo.',
+            ref.read(authControllerProvider).errorMessage ??
+            'Could not save your role. Check your connection and retry.',
       );
       return;
     }
@@ -128,7 +143,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       fontFamily: AppTypography.fontFamily,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: selected ? AppColors.deepAccent : AppColors.textPrimary,
+                      color: selected
+                          ? AppColors.deepAccent
+                          : AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -175,131 +192,152 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final apiState = ref.watch(authControllerProvider);
+    final loading = _isLoading || apiState.isLoading;
     final h = MediaQuery.of(context).size.height;
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          const Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: HeroImage(asset: 'assets/images/role_bg.png', height: 340),
-          ),
-          SingleChildScrollView(
-            child: Column(
-              children: [
-                SizedBox(
-                  height: 270,
-                  child: SafeArea(
-                    bottom: false,
-                    child: Stack(
-                      children: [
-                        const Positioned(
-                          top: 16,
-                          left: 22,
-                          child: SportsZLogo(size: 24, showTagline: true),
-                        ),
-                        Positioned(
-                          top: 12,
-                          right: 8,
-                          child: TextButton(
-                            onPressed: () {},
-                            child: const Text(
-                              'Skip',
-                              style: TextStyle(
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goBack();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Stack(
+          children: [
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: HeroImage(asset: 'assets/images/role_bg.png', height: 340),
+            ),
+            SingleChildScrollView(
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: 270,
+                    child: SafeArea(
+                      bottom: false,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: IconButton(
+                              tooltip: 'Back to sign in',
+                              onPressed: _goBack,
+                              icon: const Icon(
+                                Icons.arrow_back,
                                 color: Colors.white,
-                                fontSize: 16,
                               ),
                             ),
                           ),
-                        ),
-                        Positioned(
-                          top: 70,
-                          right: 24,
-                          child: Transform.rotate(
-                            angle: -0.2,
-                            child: const Text(
-                              'Lead\nSupport\nBuild',
-                              style: TextStyle(
-                                fontFamily: 'cursive',
-                                fontStyle: FontStyle.italic,
-                                fontSize: 22,
-                                height: 1.1,
-                                color: kLogoGold,
-                              ),
-                            ),
+                          const Positioned(
+                            top: 16,
+                            left: 58,
+                            child: SportsZLogo(size: 24, showTagline: true),
                           ),
-                        ),
-                        Positioned(
-                          left: 22,
-                          bottom: 44,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              RichText(
-                                text: const TextSpan(
-                                  style: TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                  ),
-                                  children: [
-                                    TextSpan(text: 'Select '),
-                                    TextSpan(
-                                      text: 'Your Role',
-                                      style: TextStyle(color: kLogoGold),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                'Choose your role to get started\nwith the right experience.',
+                          Positioned(
+                            top: 12,
+                            right: 8,
+                            child: TextButton(
+                              onPressed: loading ? null : _handleContinue,
+                              child: const Text(
+                                'Skip',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 15,
-                                  height: 1.3,
+                                  fontSize: 16,
                                 ),
                               ),
-                            ],
+                            ),
                           ),
+                          Positioned(
+                            top: 70,
+                            right: 24,
+                            child: Transform.rotate(
+                              angle: -0.2,
+                              child: const Text(
+                                'Lead\nSupport\nBuild',
+                                style: TextStyle(
+                                  fontFamily: 'cursive',
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 22,
+                                  height: 1.1,
+                                  color: kLogoGold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 22,
+                            bottom: 44,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                RichText(
+                                  text: const TextSpan(
+                                    style: TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                    children: [
+                                      TextSpan(text: 'Select '),
+                                      TextSpan(
+                                        text: 'Your Role',
+                                        style: TextStyle(color: kLogoGold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Choose your role to get started\nwith the right experience.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  WaveSheet(
+                    minHeight: h - 250,
+                    child: Column(
+                      children: [
+                        ..._roles.map(_card),
+                        if (_errorMessage != null ||
+                            apiState.errorMessage != null) ...[
+                          Text(
+                            _errorMessage ?? apiState.errorMessage!,
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        const SizedBox(height: 4),
+                        GoldButton(
+                          label: 'Continue',
+                          loading: loading,
+                          onPressed: _selectedRole == null
+                              ? null
+                              : _handleContinue,
                         ),
+                        const SizedBox(height: 12),
                       ],
                     ),
                   ),
-                ),
-                WaveSheet(
-                  minHeight: h - 250,
-                  child: Column(
-                    children: [
-                      ..._roles.map(_card),
-                      if (_errorMessage != null) ...[
-                        Text(
-                          _errorMessage!,
-                          style: const TextStyle(
-                            color: AppColors.error,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      const SizedBox(height: 4),
-                      GoldButton(
-                        label: 'Continue',
-                        loading: _isLoading,
-                        onPressed: _selectedRole == null
-                            ? null
-                            : _handleContinue,
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ from datetime import date
 import re
 import secrets
 from typing import Any
+from uuid import uuid4
 
 from fastapi import HTTPException
 
@@ -11,7 +12,11 @@ from app.modules.identity.profile_schema import (
     AthleteProfileResponse,
     AthleteOnboardingProfileInput,
     AthleteProfilePatch,
+    AthleteSportEditInput,
     ExperienceItem,
+    AthleteExperienceCreateInput,
+    AthleteExperiencePatchInput,
+    AthletePhysicalEditInput,
     PhysicalStats,
     PrivacySettings,
     SportProfile,
@@ -200,6 +205,207 @@ class ProfileService:
         if sports:
             self._ensure_sportsz_id(user_id)
         return self.get_my_profile(user_id)
+
+    def put_my_sport(
+        self,
+        user_id: str,
+        sport_id: str,
+        payload: AthleteSportEditInput,
+    ) -> AthleteProfileResponse:
+        profile = self.repository.get_by_user_id(user_id)
+        if not profile:
+            raise not_found("Athlete profile has not been created yet")
+        sport = self.repository.get_active_sport_by_id(sport_id)
+        if not sport:
+            raise not_found("Sport was not found in the active SportsZ catalog")
+
+        field = self._sports_field(profile)
+        current = list(profile.get(field, []))
+        existing_index = next(
+            (index for index, item in enumerate(current) if item.get("sport_id") == sport_id),
+            None,
+        )
+        existing = current[existing_index] if existing_index is not None else None
+        if existing is None:
+            is_primary = not current
+            attributes = {}
+        else:
+            is_primary = bool(existing.get("is_primary", False))
+            attributes = existing.get("attributes", {})
+
+        updated = {
+            "sport_id": sport_id,
+            "sport_name": sport["name"],
+            "is_primary": is_primary,
+            "positions": payload.positions,
+            "level": payload.level,
+            "attributes": attributes,
+        }
+        if existing_index is None:
+            current.append(updated)
+        else:
+            current[existing_index] = updated
+        if not any(item.get("is_primary") for item in current):
+            current[0]["is_primary"] = True
+        if not self.repository.replace_sports(user_id, current, field=field):
+            raise not_found("Athlete profile has not been created yet")
+        self._ensure_sportsz_id(user_id)
+        return self.get_my_profile(user_id)
+
+    def set_primary_sport(
+        self,
+        user_id: str,
+        sport_id: str,
+    ) -> AthleteProfileResponse:
+        profile = self.repository.get_by_user_id(user_id)
+        if not profile:
+            raise not_found("Athlete profile has not been created yet")
+        field = self._sports_field(profile)
+        sports = list(profile.get(field, []))
+        if not any(item.get("sport_id") == sport_id for item in sports):
+            raise not_found("Athlete sport was not found")
+        sports = [
+            {**item, "is_primary": item.get("sport_id") == sport_id}
+            for item in sports
+        ]
+        if not self.repository.replace_sports(user_id, sports, field=field):
+            raise not_found("Athlete profile has not been created yet")
+        return self.get_my_profile(user_id)
+
+    def delete_my_sport(
+        self,
+        user_id: str,
+        sport_id: str,
+    ) -> AthleteProfileResponse:
+        profile = self.repository.get_by_user_id(user_id)
+        if not profile:
+            raise not_found("Athlete profile has not been created yet")
+        field = self._sports_field(profile)
+        sports = list(profile.get(field, []))
+        removed = next(
+            (item for item in sports if item.get("sport_id") == sport_id),
+            None,
+        )
+        if removed is None:
+            raise not_found("Athlete sport was not found")
+        sports = [item for item in sports if item.get("sport_id") != sport_id]
+        if sports and (
+            removed.get("is_primary") or not any(item.get("is_primary") for item in sports)
+        ):
+            sports = [
+                {**item, "is_primary": index == 0}
+                for index, item in enumerate(sports)
+            ]
+        if not self.repository.replace_sports(user_id, sports, field=field):
+            raise not_found("Athlete profile has not been created yet")
+        return self.get_my_profile(user_id)
+
+    def patch_my_physical(
+        self,
+        user_id: str,
+        payload: AthletePhysicalEditInput,
+    ) -> AthleteProfileResponse:
+        profile = self.repository.get_by_user_id(user_id)
+        if not profile:
+            raise not_found("Athlete profile has not been created yet")
+        physical = dict(profile.get("physical") or {})
+        physical.update(payload.model_dump(mode="json", exclude_unset=True))
+        if any(
+            physical.get(field) is not None
+            for field in ("height_cm", "weight_kg", "dominant_hand")
+        ):
+            physical["measured_at"] = date.today().isoformat()
+        else:
+            physical = {}
+        if not self.repository.set_physical(user_id, physical):
+            raise not_found("Athlete profile has not been created yet")
+        return self.get_my_profile(user_id)
+
+    def create_my_experience(
+        self,
+        user_id: str,
+        payload: AthleteExperienceCreateInput,
+    ) -> AthleteProfileResponse:
+        profile = self.repository.get_by_user_id(user_id)
+        if not profile:
+            raise not_found("Athlete profile has not been created yet")
+        experience = list(profile.get("experience", []))
+        item = payload.model_dump(mode="json")
+        item["id"] = uuid4().hex
+        organization_id = item.get("organization_id")
+        organization = (
+            self.repository.get_active_organization_by_id(organization_id)
+            if organization_id
+            else None
+        )
+        if organization_id and not organization:
+            raise not_found("Organization was not found")
+        item["organization_name"] = organization.get("name") if organization else None
+        experience.append(item)
+        if not self.repository.replace_experience(user_id, experience):
+            raise not_found("Athlete profile has not been created yet")
+        return self.get_my_profile(user_id)
+
+    def patch_my_experience(
+        self,
+        user_id: str,
+        experience_id: str,
+        payload: AthleteExperiencePatchInput,
+    ) -> AthleteProfileResponse:
+        profile = self.repository.get_by_user_id(user_id)
+        if not profile:
+            raise not_found("Athlete profile has not been created yet")
+        experience = list(profile.get("experience", []))
+        index = next(
+            (i for i, item in enumerate(experience) if item.get("id") == experience_id),
+            None,
+        )
+        if index is None:
+            raise not_found("Experience was not found")
+        updated = dict(experience[index])
+        fields = payload.model_dump(mode="json", exclude_unset=True)
+        organization_id = fields.get("organization_id", updated.get("organization_id"))
+        if "organization_id" in fields:
+            organization = (
+                self.repository.get_active_organization_by_id(organization_id)
+                if organization_id
+                else None
+            )
+            if organization_id and not organization:
+                raise not_found("Organization was not found")
+            fields["organization_name"] = organization.get("name") if organization else None
+        updated.update(fields)
+        started = updated.get("started_year")
+        ended = updated.get("ended_year")
+        if started is not None and ended is not None and ended < started:
+            raise HTTPException(
+                status_code=422,
+                detail="Experience end year must be on or after its start year",
+            )
+        experience[index] = updated
+        if not self.repository.replace_experience(user_id, experience):
+            raise not_found("Athlete profile has not been created yet")
+        return self.get_my_profile(user_id)
+
+    def delete_my_experience(
+        self,
+        user_id: str,
+        experience_id: str,
+    ) -> AthleteProfileResponse:
+        profile = self.repository.get_by_user_id(user_id)
+        if not profile:
+            raise not_found("Athlete profile has not been created yet")
+        experience = list(profile.get("experience", []))
+        remaining = [item for item in experience if item.get("id") != experience_id]
+        if len(remaining) == len(experience):
+            raise not_found("Experience was not found")
+        if not self.repository.replace_experience(user_id, remaining):
+            raise not_found("Athlete profile has not been created yet")
+        return self.get_my_profile(user_id)
+
+    @staticmethod
+    def _sports_field(profile: dict[str, Any]) -> str:
+        return "sport_profiles" if "sport_profiles" in profile else "sports"
 
     def _ensure_sportsz_id(self, user_id: str) -> None:
         if self.repository.get_sportsz_id(user_id):

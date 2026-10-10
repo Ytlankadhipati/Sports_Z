@@ -9,6 +9,8 @@ from app.core.errors import register_error_handlers
 from app.modules.identity import auth_router
 from app.modules.identity import profile_router
 from app.modules.identity import sports_router
+from app.modules.identity import organizations_router
+from app.modules.identity import sportsz_id_router
 from app.modules.opportunities import router as opportunities_router
 from app.modules.events import router as events_router
 
@@ -47,6 +49,8 @@ async def request_id_middleware(request: Request, call_next):
 app.include_router(auth_router.router)
 app.include_router(profile_router.router)
 app.include_router(sports_router.router)
+app.include_router(organizations_router.router)
+app.include_router(sportsz_id_router.router)
 app.include_router(opportunities_router.router)
 app.include_router(events_router.router)
 

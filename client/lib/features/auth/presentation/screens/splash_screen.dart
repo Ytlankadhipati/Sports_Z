@@ -1,30 +1,35 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 import '../../data/datasources/auth_service.dart';
+import '../controllers/auth_controller.dart';
+import '../../../profile/presentation/controllers/profile_controller.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../onboarding/presentation/screens/onboarding_screen.dart';
 import 'home_screen.dart';
 import 'role_selection_screen.dart';
 import 'session_expired_screen.dart';
 import '../../../onboarding/presentation/screens/athlete_identity_screen.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   final AuthService _authService = AuthService();
   bool _navigationScheduled = false;
 
   @override
   void initState() {
     super.initState();
-    _checkLoginStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _checkLoginStatus();
+    });
   }
 
   void _go(Widget screen) {
@@ -42,7 +47,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkLoginStatus() async {
     try {
-      await _resolveLoginStatus().timeout(const Duration(seconds: 12));
+      await _resolveLoginStatus().timeout(const Duration(seconds: 38));
     } catch (_) {
       if (!mounted) return;
       _go(
@@ -65,13 +70,15 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) return;
 
       if (verified) {
-        final backendData = await _authService.verifyWithBackend();
+        final backendData = await ref
+            .read(authControllerProvider.notifier)
+            .verifyWithBackend();
         if (!mounted) return;
 
         if (backendData == null) {
           _go(
             const SessionExpiredScreen(
-              reason: 'We could not verify your session. Please try signing in again.',
+              reason: 'We could not verify your session. Please check your connection and sign in again.',
             ),
           );
           return;
@@ -80,17 +87,15 @@ class _SplashScreenState extends State<SplashScreen> {
         if (backendData['role'] == null) {
           _go(const RoleSelectionScreen());
         } else if (backendData['role'] == 'athlete') {
-          final profileResponse = await _authService.authorizedGet(
-            '/me/profile/athlete',
-          );
+          Map<String, dynamic>? profile;
+          try {
+            profile = await ref
+                .read(profileControllerProvider.notifier)
+                .loadProfile();
+          } on DioException catch (error) {
+            if (apiExceptionFrom(error)?.statusCode != 404) rethrow;
+          }
           if (!mounted) return;
-          final body = jsonDecode(profileResponse.body);
-          final profile =
-              profileResponse.statusCode == 200 &&
-                  body is Map<String, dynamic> &&
-                  body['data'] is Map<String, dynamic>
-              ? body['data'] as Map<String, dynamic>
-              : null;
           final sports = profile?['sports'];
           final complete =
               profile != null &&

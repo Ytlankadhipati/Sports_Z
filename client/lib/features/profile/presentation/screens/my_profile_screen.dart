@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'dart:convert';
-
-import '../../../auth/data/datasources/auth_service.dart';
+import '../../../../core/network/api_exception.dart';
+import '../controllers/profile_controller.dart';
+import 'sportsz_id_screen.dart';
+import '../../../auth/presentation/screens/login_screen.dart';
 import '../../../../../shared/theme/app_theme.dart';
 import '../../../../../shared/widgets/sportsz_logo.dart';
 
@@ -142,7 +145,7 @@ class AthleteProfileData {
 
 // ───────────────────────── Screen ─────────────────────────
 
-class MyProfileScreen extends StatefulWidget {
+class MyProfileScreen extends ConsumerStatefulWidget {
   final AthleteProfileData? data;
 
   /// Screen states (no extra screen IDs).
@@ -150,10 +153,10 @@ class MyProfileScreen extends StatefulWidget {
   final bool hasError;
   final VoidCallback? onRetry;
 
-  // ── Navigation callbacks. Null = destination not wired yet (TODO). ──
+  // ── Navigation callbacks. Edit Profile opens the M1 edit hub. ──
   final VoidCallback? onEditCover; // TODO(M1): cover upload flow
   final VoidCallback? onEditPhoto; // TODO(M1): profile photo flow
-  final VoidCallback? onEditProfile; // TODO: P02 Edit Hub
+  final Future<void> Function()? onEditProfile;
   final VoidCallback? onShareId; // TODO: I02 Share
   final VoidCallback? onViewId; // TODO: I01 SportsZ ID
   final VoidCallback? onEditAbout; // TODO: P04
@@ -189,15 +192,16 @@ class MyProfileScreen extends StatefulWidget {
   });
 
   @override
-  State<MyProfileScreen> createState() => _MyProfileScreenState();
+  ConsumerState<MyProfileScreen> createState() => _MyProfileScreenState();
 }
 
-class _MyProfileScreenState extends State<MyProfileScreen>
+class _MyProfileScreenState extends ConsumerState<MyProfileScreen>
     with SingleTickerProviderStateMixin {
-  final AuthService _authService = AuthService();
   AthleteProfileData? _loadedProfile;
   bool _isLoading = false;
   bool _hasError = false;
+  String? _loadErrorMessage;
+  int? _loadErrorStatusCode;
 
   late final AnimationController _pulse = AnimationController(
     vsync: this,
@@ -223,7 +227,12 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       _isLoading = true;
       _pulse.repeat(reverse: true);
     } else if (widget.data == null) {
-      _loadProfile();
+      // Loading updates the shared Riverpod controller state synchronously
+      // before its first network await. Defer it until the first frame has
+      // completed so Riverpod is not mutated while this route is building.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadProfile();
+      });
     }
   }
 
@@ -244,29 +253,50 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Future<void> _loadProfile() async {
+    var failurePhase = 'request';
     setState(() {
       _isLoading = true;
       _hasError = false;
+      _loadErrorMessage = null;
+      _loadErrorStatusCode = null;
     });
     _pulse.repeat(reverse: true);
     try {
-      final response = await _authService.authorizedGet('/me/profile/athlete');
-      if (response.statusCode != 200) {
-        throw const FormatException('Profile request failed');
-      }
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      final data = body['data'] as Map<String, dynamic>;
+      final data = await ref
+          .read(profileControllerProvider.notifier)
+          .loadProfile()
+          .timeout(const Duration(seconds: 15));
+      failurePhase = 'response-mapping';
       final profile = _profileFromJson(data);
       if (!mounted) return;
+      failurePhase = 'screen-state-update';
       setState(() {
         _loadedProfile = profile;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        final apiError = apiExceptionFrom(error);
+        final frames = stackTrace.toString().split('\n').take(4).join(' | ');
+        debugPrint(
+          '[P01] Profile load failed errorType=${error.runtimeType} '
+          'status=${apiError?.statusCode ?? 'none'} phase=$failurePhase '
+          'stack=$frames',
+        );
+      }
       if (!mounted) return;
+      final apiError = apiExceptionFrom(error);
       setState(() {
         _isLoading = false;
         _hasError = true;
+        _loadErrorStatusCode = apiError?.statusCode;
+        _loadErrorMessage = switch (apiError?.statusCode) {
+          401 =>
+            'Your session has expired. Sign in again to load your profile.',
+          403 => 'This athlete profile is not available for your account.',
+          404 => 'Your athlete profile could not be found.',
+          _ => 'Could not load your profile. Check your connection and retry.',
+        };
       });
     } finally {
       if (mounted) _pulse.stop();
@@ -335,6 +365,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     _loadProfile();
   }
 
+  void _goToSignIn() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
+
   // ───────────── helpers ─────────────
 
   TextStyle _t(
@@ -359,34 +396,23 @@ class _MyProfileScreenState extends State<MyProfileScreen>
     cb?.call();
   }
 
+  Future<void> _editProfile() async {
+    HapticFeedback.lightImpact();
+    final openEditHub = widget.onEditProfile;
+    if (openEditHub == null) return;
+    await openEditHub();
+    if (mounted) await _loadProfile();
+  }
+
   void _openSportszId() {
     _tap(() {
-      final profile = _profile;
-      final id = profile.sportszId?.trim();
       if (widget.onViewId != null) {
         widget.onViewId!();
         return;
       }
-      if (id == null || id.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Your SportsZ ID is not available yet.'),
-          ),
-        );
-        return;
-      }
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => _SportszIdScreen(
-            id: id,
-            name: profile.name,
-            sport: profile.sport,
-            role: profile.role,
-            city: profile.city,
-            photoUrl: profile.photoUrl,
-          ),
-        ),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const SportsZIdScreen()));
     });
   }
 
@@ -732,7 +758,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _tap(widget.onEditProfile), // TODO: P02
+                  onPressed: _editProfile,
                   icon: const Icon(Icons.edit_outlined, size: 16),
                   label: const Text('Edit Profile'),
                   style: ElevatedButton.styleFrom(
@@ -1772,7 +1798,8 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'Please check your connection and try again.',
+            _loadErrorMessage ??
+                'Could not load your profile. Check your connection and retry.',
             textAlign: TextAlign.center,
             style: _t(
               13,
@@ -1783,9 +1810,12 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           ),
           const SizedBox(height: 20),
           ElevatedButton.icon(
-            onPressed: _retryLoad,
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('Retry'),
+            onPressed: _loadErrorStatusCode == 401 ? _goToSignIn : _retryLoad,
+            icon: Icon(
+              _loadErrorStatusCode == 401 ? Icons.login : Icons.refresh,
+              size: 18,
+            ),
+            label: Text(_loadErrorStatusCode == 401 ? 'Sign In' : 'Retry'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.gold,
               foregroundColor: Colors.white,
@@ -1881,285 +1911,6 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       ),
     );
   }
-}
-
-class _SportszIdScreen extends StatelessWidget {
-  final String id;
-  final String name;
-  final String sport;
-  final String role;
-  final String? city;
-  final String? photoUrl;
-
-  const _SportszIdScreen({
-    required this.id,
-    required this.name,
-    required this.sport,
-    required this.role,
-    required this.city,
-    required this.photoUrl,
-  });
-
-  String get _initials {
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
-    final values = parts.take(2).map((part) => part[0].toUpperCase()).join();
-    return values.isEmpty ? 'SZ' : values;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = photoUrl != null && photoUrl!.trim().isNotEmpty;
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
-        title: const Text('SportsZ ID'),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: AspectRatio(
-                  aspectRatio: 0.94,
-                  child: Container(
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF111111),
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x30000000),
-                          blurRadius: 28,
-                          offset: Offset(0, 16),
-                        ),
-                      ],
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          right: -144,
-                          bottom: -170,
-                          child: Container(
-                            width: 300,
-                            height: 300,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.gold,
-                                width: 72,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 42,
-                                    height: 42,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.gold,
-                                      borderRadius: const BorderRadius.only(
-                                        topRight: Radius.circular(18),
-                                        bottomRight: Radius.circular(18),
-                                      ),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: const Text(
-                                      'SZ',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 11,
-                                      vertical: 7,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEAF5EB),
-                                      borderRadius: BorderRadius.circular(24),
-                                    ),
-                                    child: const Row(
-                                      children: [
-                                        Icon(
-                                          Icons.check_circle,
-                                          color: Color(0xFF32813A),
-                                          size: 16,
-                                        ),
-                                        SizedBox(width: 5),
-                                        Text(
-                                          'ID Issued',
-                                          style: TextStyle(
-                                            color: Color(0xFF32813A),
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 38),
-                              const Text(
-                                'SPORTSZ DIGITAL ATHLETE ID',
-                                style: TextStyle(
-                                  color: Color(0xFFE7C66F),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 2.0,
-                                ),
-                              ),
-                              const SizedBox(height: 28),
-                              Row(
-                                children: [
-                                  ClipOval(
-                                    child: SizedBox(
-                                      width: 82,
-                                      height: 82,
-                                      child: hasPhoto
-                                          ? Image.network(
-                                              photoUrl!,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (
-                                                context,
-                                                error,
-                                                stackTrace,
-                                              ) => _photoFallback(),
-                                            )
-                                          : _photoFallback(),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          name.isEmpty ? 'Athlete' : name,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        if (sport.isNotEmpty ||
-                                            role.isNotEmpty) ...[
-                                          const SizedBox(height: 7),
-                                          Text(
-                                            [sport, role]
-                                                .where(
-                                                  (value) => value.isNotEmpty,
-                                                )
-                                                .join(' · '),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: Color(0xFFCCCCCC),
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 30),
-                              const Text(
-                                'SPORTSZ ID',
-                                style: TextStyle(
-                                  color: Color(0xFFBDBDBD),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: SelectableText(
-                                  id,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.6,
-                                  ),
-                                ),
-                              ),
-                              const Spacer(),
-                              const Text(
-                                'ACTIVE',
-                                style: TextStyle(
-                                  color: Color(0xFF8FD29A),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                city != null && city!.trim().isNotEmpty
-                                    ? 'Digital sports credential · $city'
-                                    : 'Digital sports credential',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFFBDBDBD),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'SportsZ digital sports credential. Not a government ID.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _photoFallback() => Container(
-    color: const Color(0xFFFFF7E6),
-    alignment: Alignment.center,
-    child: Text(
-      _initials,
-      style: const TextStyle(
-        color: Color(0xFF74520A),
-        fontSize: 23,
-        fontWeight: FontWeight.w800,
-      ),
-    ),
-  );
 }
 
 // ───────────────────────── Cover fallback pattern ─────────────────────────
