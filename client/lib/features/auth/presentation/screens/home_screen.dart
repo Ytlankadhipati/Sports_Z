@@ -6,6 +6,7 @@ import '../../data/datasources/auth_service.dart';
 import '../controllers/auth_controller.dart';
 import '../../../../../shared/widgets/sportsz_logo.dart';
 import 'login_screen.dart';
+import '../widgets/logout_dialog.dart';
 import 'link_accounts_screen.dart';
 import 'session_expired_screen.dart';
 import '../../../account/presentation/screens/account_screen.dart';
@@ -58,6 +59,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showLogoutDialog(context);
+    if (confirmed && mounted) await _logout();
   }
 
   Future<void> _logout() async {
@@ -291,7 +297,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               color: AppColors.textSecondary,
               size: 22,
             ),
-            onPressed: _logout,
+            onPressed: _confirmLogout,
           ),
           const SizedBox(width: 6),
         ],
