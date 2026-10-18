@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sports_z/core/network/api_exception.dart';
 import 'package:sports_z/features/profile/presentation/screens/sportsz_id_screen.dart';
+import 'package:sports_z/features/profile/presentation/widgets/share_sportsz_id_sheet.dart';
 
 const _id = 'SZ-4K7M-91Q2-7';
 
@@ -17,13 +18,17 @@ Map<String, dynamic> _identity() => {
 };
 
 Widget _app({
-  Future<void> Function(String text)? shareText,
+  ShareIdCallback? shareText,
+  Future<Uint8List?> Function()? captureCard,
   SportsZIdentityLoader? loader,
+  bool openShareOnLoad = false,
 }) => ProviderScope(
   child: MaterialApp(
     home: SportsZIdScreen(
       loadIdentity: loader ?? () async => _identity(),
       shareText: shareText,
+      captureCard: captureCard,
+      openShareOnLoad: openShareOnLoad,
     ),
   ),
 );
@@ -62,6 +67,15 @@ void main() {
     );
   });
 
+  testWidgets('openShareOnLoad opens the sheet once the ID has loaded', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(openShareOnLoad: true));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Share your SportsZ ID'), findsOneWidget);
+  });
+
   testWidgets('Copy puts only the ID on the clipboard and closes the sheet', (
     tester,
   ) async {
@@ -93,12 +107,18 @@ void main() {
     expect(find.text('SportsZ ID copied'), findsOneWidget);
   });
 
-  testWidgets('Share sends the ID text and closes the sheet', (tester) async {
-    String? shared;
+  testWidgets('Share sends the ID text together with the card picture', (
+    tester,
+  ) async {
+    String? sharedText;
+    Uint8List? sharedPng;
+    final png = Uint8List.fromList([1, 2, 3]);
     await tester.pumpWidget(
       _app(
-        shareText: (text) async {
-          shared = text;
+        captureCard: () async => png,
+        shareText: (text, cardPng) async {
+          sharedText = text;
+          sharedPng = cardPng;
         },
       ),
     );
@@ -107,14 +127,39 @@ void main() {
     await tester.tap(find.byKey(const Key('share_sheet_share')));
     await tester.pumpAndSettle();
 
-    expect(shared, 'My SportsZ ID: $_id');
+    expect(sharedText, 'My SportsZ ID: $_id');
+    expect(sharedPng, png);
     expect(find.text('Share your SportsZ ID'), findsNothing);
+  });
+
+  testWidgets('Share still works with text only when the picture fails', (
+    tester,
+  ) async {
+    String? sharedText;
+    Uint8List? sharedPng = Uint8List.fromList([9]);
+    await tester.pumpWidget(
+      _app(
+        captureCard: () async => null,
+        shareText: (text, cardPng) async {
+          sharedText = text;
+          sharedPng = cardPng;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openSheet(tester);
+    await tester.tap(find.byKey(const Key('share_sheet_share')));
+    await tester.pumpAndSettle();
+
+    expect(sharedText, 'My SportsZ ID: $_id');
+    expect(sharedPng, isNull);
   });
 
   testWidgets('Share failure shows a safe message', (tester) async {
     await tester.pumpWidget(
       _app(
-        shareText: (text) async {
+        captureCard: () async => null,
+        shareText: (text, cardPng) async {
           throw StateError('share failed');
         },
       ),

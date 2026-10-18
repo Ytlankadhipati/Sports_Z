@@ -3,20 +3,37 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sports_z/shared/theme/app_theme.dart';
 
-/// Sends [text] to the platform share sheet. Replaceable in tests.
-typedef ShareTextCallback = Future<void> Function(String text);
+/// Shares [text] and, when available, the ID card picture [cardPng].
+/// Replaceable in tests.
+typedef ShareIdCallback = Future<void> Function(
+  String text,
+  Uint8List? cardPng,
+);
 
 String sportszIdShareText(String sportszId) => 'My SportsZ ID: $sportszId';
 
-Future<void> _defaultShareText(String text) async {
-  await SharePlus.instance.share(ShareParams(text: text));
+Future<void> _defaultShare(String text, Uint8List? cardPng) async {
+  if (cardPng == null) {
+    await SharePlus.instance.share(ShareParams(text: text));
+    return;
+  }
+  await SharePlus.instance.share(
+    ShareParams(
+      text: text,
+      files: [
+        XFile.fromData(cardPng, mimeType: 'image/png', name: 'sportsz-id.png'),
+      ],
+      fileNameOverrides: ['sportsz-id.png'],
+    ),
+  );
 }
 
-/// I02: opens the share sheet for the athlete's SportsZ ID.
+/// I02: opens the share sheet for the athlete's SportsZ ID card.
 Future<void> showShareSportsZIdSheet(
   BuildContext context, {
   required String sportszId,
-  ShareTextCallback? onShare,
+  Future<Uint8List?> Function()? captureCard,
+  ShareIdCallback? onShare,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -24,19 +41,22 @@ Future<void> showShareSportsZIdSheet(
     backgroundColor: AppColors.background,
     builder: (_) => ShareSportsZIdSheet(
       sportszId: sportszId,
-      onShare: onShare ?? _defaultShareText,
+      captureCard: captureCard,
+      onShare: onShare ?? _defaultShare,
     ),
   );
 }
 
 class ShareSportsZIdSheet extends StatelessWidget {
   final String sportszId;
-  final ShareTextCallback onShare;
+  final Future<Uint8List?> Function()? captureCard;
+  final ShareIdCallback onShare;
 
   const ShareSportsZIdSheet({
     super.key,
     required this.sportszId,
     required this.onShare,
+    this.captureCard,
   });
 
   Future<void> _copy(BuildContext context) async {
@@ -52,7 +72,8 @@ class ShareSportsZIdSheet extends StatelessWidget {
     final navigator = Navigator.of(context);
     navigator.pop();
     try {
-      await onShare(sportszIdShareText(sportszId));
+      final png = await captureCard?.call();
+      await onShare(sportszIdShareText(sportszId), png);
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not open the share sheet.')),
@@ -101,7 +122,7 @@ class ShareSportsZIdSheet extends StatelessWidget {
               key: const Key('share_sheet_share'),
               onPressed: () => _share(context),
               icon: const Icon(Icons.ios_share),
-              label: const Text('Share'),
+              label: const Text('Share ID card'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 backgroundColor: AppColors.gold,
