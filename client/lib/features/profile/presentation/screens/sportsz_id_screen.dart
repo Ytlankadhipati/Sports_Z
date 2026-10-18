@@ -5,14 +5,16 @@ import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/network/api_exception.dart';
 import '../controllers/profile_controller.dart';
 import 'profile_edit_support.dart';
+import '../widgets/share_sportsz_id_sheet.dart';
 
 typedef SportsZIdentityLoader = Future<Map<String, dynamic>> Function();
 
 /// I01 — the signed-in athlete's backend-issued SportsZ identity.
 class SportsZIdScreen extends ConsumerStatefulWidget {
   final SportsZIdentityLoader? loadIdentity;
+  final ShareTextCallback? shareText;
 
-  const SportsZIdScreen({super.key, this.loadIdentity});
+  const SportsZIdScreen({super.key, this.loadIdentity, this.shareText});
 
   @override
   ConsumerState<SportsZIdScreen> createState() => _SportsZIdScreenState();
@@ -91,6 +93,18 @@ class _SportsZIdScreenState extends ConsumerState<SportsZIdScreen> {
           onPressed: () => Navigator.maybePop(context),
           icon: const Icon(Icons.arrow_back_ios_new, size: 18),
         ),
+        actions: [
+          if (_identity != null)
+            IconButton(
+              tooltip: 'Share SportsZ ID',
+              onPressed: () => showShareSportsZIdSheet(
+                context,
+                sportszId: _identity!['sportsz_id'].toString(),
+                onShare: widget.shareText,
+              ),
+              icon: const Icon(Icons.ios_share, size: 22),
+            ),
+        ],
       ),
       body: _loading
           ? const ProfileLoadingState()
