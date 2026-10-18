@@ -404,6 +404,14 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen>
     if (mounted) await _loadProfile();
   }
 
+  void _openShareId() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const SportsZIdScreen(openShareOnLoad: true),
+      ),
+    );
+  }
+
   void _openSportszId() {
     _tap(() {
       if (widget.onViewId != null) {
@@ -776,7 +784,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen>
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _tap(widget.onShareId), // TODO: I02
+                  onPressed: () => _tap(widget.onShareId ?? _openShareId),
                   icon: const Icon(
                     Icons.share_outlined,
                     size: 16,

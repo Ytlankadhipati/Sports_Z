@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../shared/theme/app_theme.dart';
@@ -12,9 +16,17 @@ typedef SportsZIdentityLoader = Future<Map<String, dynamic>> Function();
 /// I01 — the signed-in athlete's backend-issued SportsZ identity.
 class SportsZIdScreen extends ConsumerStatefulWidget {
   final SportsZIdentityLoader? loadIdentity;
-  final ShareTextCallback? shareText;
+  final ShareIdCallback? shareText;
+  final Future<Uint8List?> Function()? captureCard;
+  final bool openShareOnLoad;
 
-  const SportsZIdScreen({super.key, this.loadIdentity, this.shareText});
+  const SportsZIdScreen({
+    super.key,
+    this.loadIdentity,
+    this.shareText,
+    this.captureCard,
+    this.openShareOnLoad = false,
+  });
 
   @override
   ConsumerState<SportsZIdScreen> createState() => _SportsZIdScreenState();
@@ -24,6 +36,8 @@ class _SportsZIdScreenState extends ConsumerState<SportsZIdScreen> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _identity;
+  final GlobalKey _cardKey = GlobalKey();
+  bool _autoShared = false;
 
   @override
   void initState() {
@@ -31,6 +45,30 @@ class _SportsZIdScreenState extends ConsumerState<SportsZIdScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _load();
     });
+  }
+
+  Future<Uint8List?> _captureCard() async {
+    try {
+      final boundary =
+          _cardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _openShare() {
+    final data = _identity;
+    if (data == null) return;
+    showShareSportsZIdSheet(
+      context,
+      sportszId: data['sportsz_id'].toString(),
+      captureCard: widget.captureCard ?? _captureCard,
+      onShare: widget.shareText,
+    );
   }
 
   Future<void> _load() async {
@@ -53,6 +91,12 @@ class _SportsZIdScreenState extends ConsumerState<SportsZIdScreen> {
         _identity = data;
         _loading = false;
       });
+      if (widget.openShareOnLoad && !_autoShared) {
+        _autoShared = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openShare();
+        });
+      }
     } on _IdentityFailure catch (error) {
       if (mounted) {
         setState(() {
@@ -97,11 +141,7 @@ class _SportsZIdScreenState extends ConsumerState<SportsZIdScreen> {
           if (_identity != null)
             IconButton(
               tooltip: 'Share SportsZ ID',
-              onPressed: () => showShareSportsZIdSheet(
-                context,
-                sportszId: _identity!['sportsz_id'].toString(),
-                onShare: widget.shareText,
-              ),
+              onPressed: _openShare,
               icon: const Icon(Icons.ios_share, size: 22),
             ),
         ],
@@ -154,11 +194,14 @@ class _SportsZIdScreenState extends ConsumerState<SportsZIdScreen> {
                 children: [
                   AspectRatio(
                     aspectRatio: 0.91,
-                    child: _DigitalIdCard(
-                      sportszId: id,
-                      name: name,
-                      subtitle: subtitle,
-                      photoUrl: photoUrl,
+                    child: RepaintBoundary(
+                      key: _cardKey,
+                      child: _DigitalIdCard(
+                        sportszId: id,
+                        name: name,
+                        subtitle: subtitle,
+                        photoUrl: photoUrl,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
