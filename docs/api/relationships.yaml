@@ -1,0 +1,120 @@
+# ============================================================
+# SPORTSZ API CONTRACTS — M4 (CONNECTIONS, COACH LINKS, MESSAGING, PRIVACY ACCESS)
+# Style follows docs/api/m1.yaml. One YAML document per contract, separated by '---'.
+#
+# STATUS: DRAFT (authz core slice only). Lines marked TODO(confirm) are NOT from
+# the v3 doc and must be confirmed with the team (and v2.1 section 3) before code.
+# Conventions: /v1, envelope {data, meta{next_cursor, request_id}},
+# errors {error{code, message, details, request_id}}.
+# ============================================================
+
+# ------------------------------------------------------------
+# CONTRACT 1 — POST /v1/connections   (C01 Send connection request)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/connections
+  auth: Bearer <Firebase ID Token>
+  authorization: >
+    Authenticated, not platform-blocked. Target must be visible to the viewer
+    (authorize(read) on target profile). Blocked in either direction -> 404.
+  owner: M4
+  screen_id: C01
+  stub: S-08
+
+request:
+  headers:
+    Authorization: { type: string, required: true }
+    X-Active-Role: { type: string, required: false, description: "must be a role the user holds" }
+  body:
+    target_user_id: { type: string, required: true }   # TODO(confirm) id type: user_id vs sportsz_id
+    note: { type: string, required: false, max_length: 140 }
+
+response:
+  status: 201
+  envelope:
+    data:
+      id: { type: string }
+      status: { type: string, enum: [requested] }
+      note: { type: string, nullable: true }
+    meta: { request_id: { type: string, nullable: true } }
+
+errors:
+  401: { code: AUTH_REQUIRED }
+  404: { code: NOT_FOUND, description: "target missing OR hidden/blocked (uniform)" }
+  409: { code: CONFLICT, description: "active/requested connection already exists" }   # TODO(confirm) code
+  422: { code: VALIDATION_ERROR, description: "note > 140 chars, extra fields" }
+  429: { code: RATE_LIMITED }                                                            # TODO(confirm) code
+
+collections:
+  primary: [connections (M4 owner)]
+  lookup: [users (M1), athlete_profiles (M1)]
+
+tests_required:
+  - note of 141 chars -> 422
+  - blocked either direction -> 404 (same body as unknown id)
+  - duplicate request -> 409
+  - user B cannot read/respond to a connection they are not part of (IDOR)
+
+---
+# ------------------------------------------------------------
+# CONTRACT 2 — POST /v1/connections/{id}/respond   (C02)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/connections/{id}/respond
+  auth: Bearer <Firebase ID Token>
+  authorization: Only the REQUESTED party (participant). Non-participant -> 404.
+  owner: M4
+  screen_id: C02
+
+request:
+  body:
+    decision: { type: string, enum: [accept, decline], required: true }
+
+response:
+  envelope:
+    data:
+      id: { type: string }
+      status: { type: string, enum: [accepted, declined] }
+
+errors:
+  401: { code: AUTH_REQUIRED }
+  404: { code: NOT_FOUND, description: "not a participant OR missing (uniform)" }
+  409: { code: CONFLICT, description: "already responded" }   # TODO(confirm)
+
+state_machine: "requested -> accepted | declined ; blocked is a separate state"
+
+tests_required:
+  - requester cannot respond to their own request (403 or 404 — TODO(confirm))
+  - responding twice -> 409
+
+---
+# ------------------------------------------------------------
+# CONTRACT 3 — GET /v1/me/profile/preview?as=   (PR08 View as)
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/me/profile/preview
+  auth: Bearer <Firebase ID Token>
+  authorization: OWN. Output comes from the SAME project() used for real viewers.
+  owner: M4
+  screen_id: PR08
+  depends_on: [M1 athlete_profiles read, M4 project()]
+
+request:
+  query_parameters:
+    as: { type: string, enum: [athlete, coach, linked_coach, recruiter, public], required: true }
+
+response:
+  envelope:
+    data: { description: "AthleteProfileView exactly as that audience would receive it" }
+
+tests_required:
+  - preview equals real projection for each audience (see test_view_as_equals_real_projection)
+  - user B cannot preview user A's profile
+
+open_questions:
+  - TODO(confirm) full route list for M4 from v2.1 section 3 (conversations, coach-links, access-grants)
+  - TODO(confirm) /connections/{id}/unblock, /coach-links/{id}/decline, POST /access-grants,
+    athlete-initiated coach link (listed as open items in v3)
