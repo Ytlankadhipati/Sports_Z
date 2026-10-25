@@ -17,6 +17,10 @@ from app.modules.events import router as events_router
 from app.modules.discovery import router as saved_router
 from app.modules.events.repository import ensure_indexes as ensure_event_indexes
 from app.modules.discovery.repository import ensure_indexes as ensure_saved_indexes
+from app.modules.relationships import router as relationships_router
+from app.modules.messaging import router as messaging_router
+from app.devtools import router as devtools_router
+from app.modules.relationships.container import ensure_indexes as ensure_m4_indexes
 
 
 @asynccontextmanager
@@ -25,6 +29,7 @@ async def lifespan(_: FastAPI):
     ensure_indexes()
     ensure_event_indexes()
     ensure_saved_indexes()
+    ensure_m4_indexes()
     yield
 
 
@@ -61,6 +66,9 @@ app.include_router(sportsz_id_router.router)
 app.include_router(opportunities_router.router)
 app.include_router(events_router.router)
 app.include_router(saved_router.router)
+app.include_router(relationships_router.router)
+app.include_router(messaging_router.router)
+app.include_router(devtools_router.router)  # 404 unless DEV_TOOLS_ENABLED=true
 
 
 @app.get("/")
