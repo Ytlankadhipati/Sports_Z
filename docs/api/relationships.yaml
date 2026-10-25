@@ -1,120 +1,576 @@
 # ============================================================
-# SPORTSZ API CONTRACTS — M4 (CONNECTIONS, COACH LINKS, MESSAGING, PRIVACY ACCESS)
+# SPORTSZ API CONTRACTS — M4 (CONNECTIONS, COACH LINKS, ACCESS GRANTS, MESSAGING, PRIVACY)
 # Style follows docs/api/m1.yaml. One YAML document per contract, separated by '---'.
+# GENERATED from the implemented routes in backend/app/modules/{relationships,messaging}.
 #
-# STATUS: DRAFT (authz core slice only). Lines marked TODO(confirm) are NOT from
-# the v3 doc and must be confirmed with the team (and v2.1 section 3) before code.
+# STATUS: DRAFT for team review. TODO(confirm) = not stated in the v3 doc; confirm vs v2.1 section 3.
 # Conventions: /v1, envelope {data, meta{next_cursor, request_id}},
 # errors {error{code, message, details, request_id}}.
+# Common to every route: Authorization: Bearer <Firebase ID Token>; optional X-Active-Role
+# (must be a role the user holds, else 403). Participant-only resources answer 404 (never 403)
+# to non-participants, identical to a missing id (IDOR / enumeration safe).
 # ============================================================
 
+---
 # ------------------------------------------------------------
-# CONTRACT 1 — POST /v1/connections   (C01 Send connection request)
+# CONTRACT 1 — POST /v1/connections   (C01)
 # ------------------------------------------------------------
 contract:
   method: POST
   endpoint: /v1/connections
   auth: Bearer <Firebase ID Token>
-  authorization: >
-    Authenticated, not platform-blocked. Target must be visible to the viewer
-    (authorize(read) on target profile). Blocked in either direction -> 404.
+  authorization: "Active role athlete|coach|recruiter, not platform-blocked. Target must exist; blocked either way -> 404."
   owner: M4
-  screen_id: C01
-  stub: S-08
-
-request:
-  headers:
-    Authorization: { type: string, required: true }
-    X-Active-Role: { type: string, required: false, description: "must be a role the user holds" }
-  body:
-    target_user_id: { type: string, required: true }   # TODO(confirm) id type: user_id vs sportsz_id
-    note: { type: string, required: false, max_length: 140 }
-
-response:
-  status: 201
-  envelope:
-    data:
-      id: { type: string }
-      status: { type: string, enum: [requested] }
-      note: { type: string, nullable: true }
-    meta: { request_id: { type: string, nullable: true } }
-
-errors:
-  401: { code: AUTH_REQUIRED }
-  404: { code: NOT_FOUND, description: "target missing OR hidden/blocked (uniform)" }
-  409: { code: CONFLICT, description: "active/requested connection already exists" }   # TODO(confirm) code
-  422: { code: VALIDATION_ERROR, description: "note > 140 chars, extra fields" }
-  429: { code: RATE_LIMITED }                                                            # TODO(confirm) code
-
-collections:
-  primary: [connections (M4 owner)]
-  lookup: [users (M1), athlete_profiles (M1)]
-
-tests_required:
-  - note of 141 chars -> 422
-  - blocked either direction -> 404 (same body as unknown id)
-  - duplicate request -> 409
-  - user B cannot read/respond to a connection they are not part of (IDOR)
+  screen_id: "C01"
+  stub: "S-08"
+request: "body {target_user_id: string, note?: string <=140 (platform_config limits.connection_note_max_chars)}"
+response: "201 {id, status: requested, direction, counterpart{user_id,name,photo_url,role}, note}"
+errors: "401 AUTH_REQUIRED; 403 FORBIDDEN (role/blocked user); 404 NOT_FOUND (missing OR blocked); 409 CONFLICT; 422 VALIDATION_ERROR; 429 RATE_LIMITED (limits.connection_requests_per_day)"
+collections: "connections (M4)"
+dependencies: "users, athlete_profiles (M1 read)"
+tests_required: "note 141 -> 422; blocked == unknown id; duplicate -> 409"
 
 ---
 # ------------------------------------------------------------
-# CONTRACT 2 — POST /v1/connections/{id}/respond   (C02)
+# CONTRACT 2 — GET /v1/connections   (C02, PR09)
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/connections
+  auth: Bearer <Firebase ID Token>
+  authorization: "Own connections only. Rows blocked BY SOMEONE ELSE are never returned."
+  owner: M4
+  screen_id: "C02, PR09"
+  stub: "S-08"
+request: "query {status?: comma list (requested,accepted,declined,blocked), limit 1..50, cursor}"
+response: "200 [ConnectionView], meta.next_cursor"
+errors: "401"
+collections: "connections (M4)"
+dependencies: "users, athlete_profiles (M1 read)"
+tests_required: "user B never sees user A's connections; blocked-by-other hidden"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 3 — POST /v1/connections/block   (PR09)
 # ------------------------------------------------------------
 contract:
   method: POST
-  endpoint: /v1/connections/{id}/respond
+  endpoint: /v1/connections/block
   auth: Bearer <Firebase ID Token>
-  authorization: Only the REQUESTED party (participant). Non-participant -> 404.
+  authorization: "Any relationship role. Creates/updates the pair as blocked (TODO(confirm) route shape; v3 only says …/block)."
   owner: M4
-  screen_id: C02
-
-request:
-  body:
-    decision: { type: string, enum: [accept, decline], required: true }
-
-response:
-  envelope:
-    data:
-      id: { type: string }
-      status: { type: string, enum: [accepted, declined] }
-
-errors:
-  401: { code: AUTH_REQUIRED }
-  404: { code: NOT_FOUND, description: "not a participant OR missing (uniform)" }
-  409: { code: CONFLICT, description: "already responded" }   # TODO(confirm)
-
-state_machine: "requested -> accepted | declined ; blocked is a separate state"
-
-tests_required:
-  - requester cannot respond to their own request (403 or 404 — TODO(confirm))
-  - responding twice -> 409
+  screen_id: "PR09"
+  stub: "S-08"
+request: "body {target_user_id}"
+response: "200 ConnectionView(status: blocked, blocked_by_me: true)"
+errors: "401; 403; 404; 422"
+collections: "connections (M4)"
+dependencies: "users (M1 read)"
+tests_required: "blocked user gets 404 on profile/message/connect"
 
 ---
 # ------------------------------------------------------------
-# CONTRACT 3 — GET /v1/me/profile/preview?as=   (PR08 View as)
+# CONTRACT 4 — POST /v1/connections/{connection_id}/block   (PR09)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/connections/{connection_id}/block
+  auth: Bearer <Firebase ID Token>
+  authorization: "Participant only (non-participant -> 404)."
+  owner: M4
+  screen_id: "PR09"
+  stub: "S-08"
+request: "path connection_id"
+response: "200 ConnectionView"
+errors: "401; 404"
+collections: "connections (M4)"
+dependencies: "-"
+tests_required: "IDOR: stranger -> 404"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 5 — POST /v1/connections/{connection_id}/unblock   (PR09)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/connections/{connection_id}/unblock
+  auth: Bearer <Firebase ID Token>
+  authorization: "Only the user who blocked. TODO(confirm) open item."
+  owner: M4
+  screen_id: "PR09"
+  stub: "S-08"
+request: "path connection_id"
+response: "204"
+errors: "401; 404 (not participant / not the blocker)"
+collections: "connections (M4)"
+dependencies: "-"
+tests_required: "only blocker can unblock; unblock restores access"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 6 — POST /v1/connections/{connection_id}/respond   (C02)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/connections/{connection_id}/respond
+  auth: Bearer <Firebase ID Token>
+  authorization: "Only the invited person (target). Requester -> 403; stranger -> 404."
+  owner: M4
+  screen_id: "C02"
+  stub: "S-08"
+request: "body {decision: accept|decline}"
+response: "200 ConnectionView(status: accepted|declined)"
+errors: "401; 403; 404; 409 (already handled); 422"
+collections: "connections (M4)"
+dependencies: "-"
+tests_required: "state machine requested -> accepted|declined"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 7 — GET /v1/coach-links   (L01)
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/coach-links
+  auth: Bearer <Firebase ID Token>
+  authorization: "Own links only."
+  owner: M4
+  screen_id: "L01"
+  stub: "S-06"
+request: "query {status?: comma list (requested,active,declined,ended), limit, cursor}"
+response: "200 [CoachLinkView]"
+errors: "401; 403"
+collections: "coach_athlete_links (M4)"
+dependencies: "users (M1 read)"
+tests_required: "stranger sees none"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 8 — POST /v1/coach-links   (L01, L02)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/coach-links
+  auth: Bearer <Firebase ID Token>
+  authorization: "Coach->athlete OR athlete->coach (athlete-initiated is an open item, supported). Coach must be VERIFIED. Blocked pair -> 404."
+  owner: M4
+  screen_id: "L01, L02"
+  stub: "S-06"
+request: "body {counterpart_user_id, sport_id}"
+response: "201 CoachLinkView(status: requested)"
+errors: "401; 403 (not coach<->athlete, or coach unverified); 404; 409 (open link exists for coach+athlete+sport); 422"
+collections: "coach_athlete_links (M4)"
+dependencies: "users (M1), verification state (M5, TODO(confirm) field)"
+tests_required: "unique index uq_coach_links_open on (coach,athlete,sport) where open=true"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 9 — POST /v1/coach-links/{link_id}/approve   (L02)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/coach-links/{link_id}/approve
+  auth: Bearer <Firebase ID Token>
+  authorization: "The participant who did NOT initiate."
+  owner: M4
+  screen_id: "L02"
+  stub: "S-06"
+request: "path link_id"
+response: "200 CoachLinkView(status: active)"
+errors: "401; 403 (initiator); 404; 409"
+collections: "coach_athlete_links (M4)"
+dependencies: "-"
+tests_required: "initiator cannot approve own request"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 10 — POST /v1/coach-links/{link_id}/decline   (L02)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/coach-links/{link_id}/decline
+  auth: Bearer <Firebase ID Token>
+  authorization: "The participant who did NOT initiate. TODO(confirm) open item."
+  owner: M4
+  screen_id: "L02"
+  stub: "S-06"
+request: "path link_id"
+response: "200 CoachLinkView(status: declined)"
+errors: "401; 403; 404; 409"
+collections: "coach_athlete_links (M4)"
+dependencies: "-"
+tests_required: "decline frees the (coach,athlete,sport) slot"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 11 — POST /v1/coach-links/{link_id}/end   (L02)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/coach-links/{link_id}/end
+  auth: Bearer <Firebase ID Token>
+  authorization: "Either participant (requester may cancel). Revokes LINKED access immediately."
+  owner: M4
+  screen_id: "L02"
+  stub: "S-06"
+request: "path link_id"
+response: "200 CoachLinkView(status: ended)"
+errors: "401; 404; 409 (already closed)"
+collections: "coach_athlete_links, access_grants (M4)"
+dependencies: "-"
+tests_required: "after end: active_coach_link false and source=link grants revoked"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 12 — GET /v1/access-grants   (PR06)
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/access-grants
+  auth: Bearer <Firebase ID Token>
+  authorization: "Own grants (as owner or grantee)."
+  owner: M4
+  screen_id: "PR06"
+  stub: "S-10"
+request: "query {role?: owner|grantee, status?, limit, cursor}"
+response: "200 [GrantView]"
+errors: "401; 403"
+collections: "access_grants (M4)"
+dependencies: "-"
+tests_required: "stranger sees none"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 13 — POST /v1/access-grants/requests   (PR07)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/access-grants/requests
+  auth: Bearer <Firebase ID Token>
+  authorization: "Any relationship role, not blocked by the owner."
+  owner: M4
+  screen_id: "PR07"
+  stub: "S-10"
+request: "body {owner_user_id, scopes: [profile_full|physical|performance|certificates|contact]}  (TODO(confirm) scope names)"
+response: "201 GrantView(status: requested)"
+errors: "401; 403; 404; 422 (unknown scope)"
+collections: "access_grants (M4)"
+dependencies: "-"
+tests_required: "blocked -> 404"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 14 — POST /v1/access-grants   (PR06)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/access-grants
+  auth: Bearer <Firebase ID Token>
+  authorization: "Owner grants proactively. TODO(confirm) open item."
+  owner: M4
+  screen_id: "PR06"
+  stub: "-"
+request: "body {grantee_user_id, scopes, expires_at?: future datetime; default now+limits.grant_default_days}"
+response: "201 GrantView(status: active)"
+errors: "401; 403; 404; 422 (empty/unknown scopes, past expiry)"
+collections: "access_grants (M4)"
+dependencies: "-"
+tests_required: "default expiry set"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 15 — POST /v1/access-grants/{grant_id}/grant   (PR07)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/access-grants/{grant_id}/grant
+  auth: Bearer <Firebase ID Token>
+  authorization: "Owner only. Grantee -> 403; stranger -> 404."
+  owner: M4
+  screen_id: "PR07"
+  stub: "S-10"
+request: "body? {expires_at?}"
+response: "200 GrantView(status: active)"
+errors: "401; 403; 404; 409"
+collections: "access_grants (M4)"
+dependencies: "-"
+tests_required: "grantee cannot self-approve"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 16 — POST /v1/access-grants/{grant_id}/decline   (PR07)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/access-grants/{grant_id}/decline
+  auth: Bearer <Firebase ID Token>
+  authorization: "Owner only. TODO(confirm) route name (v3 truncates)."
+  owner: M4
+  screen_id: "PR07"
+  stub: "S-10"
+request: "path grant_id"
+response: "200 GrantView(status: declined)"
+errors: "401; 403; 404; 409"
+collections: "access_grants (M4)"
+dependencies: "-"
+tests_required: "-"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 17 — POST /v1/access-grants/{grant_id}/revoke   (PR06)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/access-grants/{grant_id}/revoke
+  auth: Bearer <Firebase ID Token>
+  authorization: "Owner only."
+  owner: M4
+  screen_id: "PR06"
+  stub: "S-10"
+request: "path grant_id"
+response: "200 GrantView(status: revoked)"
+errors: "401; 403; 404; 409"
+collections: "access_grants (M4)"
+dependencies: "-"
+tests_required: "expired grants give no scopes"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 18 — GET /v1/conversations   (M01, M02)
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/conversations
+  auth: Bearer <Firebase ID Token>
+  authorization: "Own conversations only (participants). Deleted-for-me threads hidden."
+  owner: M4
+  screen_id: "M01, M02"
+  stub: "S-09"
+request: "query {q?: <=80 chars (M02 search: counterpart name / last preview), limit, cursor}"
+response: "200 [ConversationView{id, counterpart, last_message_preview, last_message_at, unread_count, muted, read_only, read_only_reason}]"
+errors: "401; 403"
+collections: "conversations (M4)"
+dependencies: "users, athlete_profiles (M1 read)"
+tests_required: "stranger sees none"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 19 — POST /v1/conversations   (M05)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/conversations
+  auth: Bearer <Firebase ID Token>
+  authorization: "can_start_conversation(): athlete<->VERIFIED coach (accepted connection OR active link) or athlete<->VERIFIED recruiter (accepted connection OR application, via M3 lookup). Blocked/unrelated/athlete<->athlete -> not allowed."
+  owner: M4
+  screen_id: "M05"
+  stub: "S-09"
+request: "body {recipient_user_id, text: 1..limits.message_max_chars (default 1000)}"
+response: "201 {conversation_id, message}"
+errors: "401; 403 (no basis / unverified); 404 (blocked, unknown, pair not allowed); 422; 429 RATE_LIMITED (limits.message_rate_per_minute)"
+collections: "conversations, messages (M4)"
+dependencies: "M3 applications lookup (TODO: replace stub no_applications), M5 verification state"
+tests_required: "every pair: verified/unverified x linked/unlinked x blocked"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 20 — GET /v1/conversations/{conversation_id}/messages   (M03)
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/conversations/{conversation_id}/messages
+  auth: Bearer <Firebase ID Token>
+  authorization: "Participant only (else 404). History stays readable when read-only."
+  owner: M4
+  screen_id: "M03"
+  stub: "S-09"
+request: "query {limit 1..100, cursor}"
+response: "200 {conversation, messages[]} newest first"
+errors: "401; 404"
+collections: "messages (M4)"
+dependencies: "-"
+tests_required: "IDOR: stranger -> 404"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 21 — POST /v1/conversations/{conversation_id}/messages   (M03)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/conversations/{conversation_id}/messages
+  auth: Bearer <Firebase ID Token>
+  authorization: "Participant AND can_send_message(): not blocked and a basis still exists, else 403 read-only (404 when blocked)."
+  owner: M4
+  screen_id: "M03"
+  stub: "S-09"
+request: "body {text}"
+response: "201 {conversation_id, message}"
+errors: "401; 403 (read-only); 404; 422; 429"
+collections: "messages (M4)"
+dependencies: "-"
+tests_required: "ended link w/o connection -> read-only; unverified pro may reply"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 22 — POST /v1/conversations/{conversation_id}/read   (M04)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/conversations/{conversation_id}/read
+  auth: Bearer <Firebase ID Token>
+  authorization: "Participant only. Private marker, NO read receipts shown to the other side."
+  owner: M4
+  screen_id: "M04"
+  stub: "S-09"
+request: "path"
+response: "204"
+errors: "401; 404"
+collections: "conversations (M4)"
+dependencies: "-"
+tests_required: "unread_count resets for caller only"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 23 — PATCH /v1/conversations/{conversation_id}/mute   (M04)
+# ------------------------------------------------------------
+contract:
+  method: PATCH
+  endpoint: /v1/conversations/{conversation_id}/mute
+  auth: Bearer <Firebase ID Token>
+  authorization: "Participant only, per-user."
+  owner: M4
+  screen_id: "M04"
+  stub: "S-09"
+request: "body {muted: boolean}"
+response: "200 ConversationView"
+errors: "401; 404; 422"
+collections: "conversations (M4)"
+dependencies: "-"
+tests_required: "mute does not affect the other side"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 24 — DELETE /v1/conversations/{conversation_id}   (M04)
+# ------------------------------------------------------------
+contract:
+  method: DELETE
+  endpoint: /v1/conversations/{conversation_id}
+  auth: Bearer <Firebase ID Token>
+  authorization: "Participant only; hides for the caller only. A new message re-opens it."
+  owner: M4
+  screen_id: "M04"
+  stub: "S-09"
+request: "path"
+response: "204"
+errors: "401; 404"
+collections: "conversations (M4)"
+dependencies: "-"
+tests_required: "counterpart still sees the thread"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 25 — GET /v1/me/privacy/schema   (PR01-PR05)
+# ------------------------------------------------------------
+contract:
+  method: GET
+  endpoint: /v1/me/privacy/schema
+  auth: Bearer <Firebase ID Token>
+  authorization: "Authenticated. M1 persists values via its PATCH …/privacy."
+  owner: M4
+  screen_id: "PR01-PR05"
+  stub: "-"
+request: "none"
+response: "200 {discoverable, contact_policy{options}, fields[{field, hideable, visible_to}], preview_audiences}"
+errors: "401"
+collections: "- (reads field_registry)"
+dependencies: "M1 persists privacy"
+tests_required: "hideable list matches field registry; contact_policy options TODO(confirm)"
+
+---
+# ------------------------------------------------------------
+# CONTRACT 26 — GET /v1/me/profile/preview   (PR08)
 # ------------------------------------------------------------
 contract:
   method: GET
   endpoint: /v1/me/profile/preview
   auth: Bearer <Firebase ID Token>
-  authorization: OWN. Output comes from the SAME project() used for real viewers.
+  authorization: "Athlete only, own profile. Same project() as real viewers."
   owner: M4
-  screen_id: PR08
-  depends_on: [M1 athlete_profiles read, M4 project()]
+  screen_id: "PR08"
+  stub: "-"
+request: "query {as: athlete|coach|linked_coach|recruiter|public}"
+response: "200 AthleteProfileView exactly as that audience receives it"
+errors: "401; 403 (not athlete); 404 (no profile); 422 (bad `as`)"
+collections: "- (reads athlete_profiles, sports_ids: M1)"
+dependencies: "M1 profile, M4 project()"
+tests_required: "preview == real projection (unit test)"
 
-request:
-  query_parameters:
-    as: { type: string, enum: [athlete, coach, linked_coach, recruiter, public], required: true }
+---
+# ------------------------------------------------------------
+# CONTRACT 27 — POST /v1/devtools/seed   (S-13)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/devtools/seed
+  auth: Bearer <Firebase ID Token>
+  authorization: "Only when DEV_TOOLS_ENABLED=true; otherwise 404 like an unknown route."
+  owner: M4
+  screen_id: "S-13"
+  stub: "S-13"
+request: "none"
+response: "200 {fixture_name: user_id}"
+errors: "404 (disabled)"
+collections: "users, athlete_profiles, platform_config"
+dependencies: "-"
+tests_required: "idempotent"
 
-response:
-  envelope:
-    data: { description: "AthleteProfileView exactly as that audience would receive it" }
+---
+# ------------------------------------------------------------
+# CONTRACT 28 — POST /v1/devtools/reset   (S-13)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/devtools/reset
+  auth: Bearer <Firebase ID Token>
+  authorization: "Same guard. Deletes M4 data involving fixture users only."
+  owner: M4
+  screen_id: "S-13"
+  stub: "S-13"
+request: "none"
+response: "200 {collection: deleted_count}"
+errors: "404"
+collections: "connections, coach_athlete_links, access_grants, conversations, messages"
+dependencies: "-"
+tests_required: "real users' data untouched"
 
-tests_required:
-  - preview equals real projection for each audience (see test_view_as_equals_real_projection)
-  - user B cannot preview user A's profile
+---
+# ------------------------------------------------------------
+# CONTRACT 29 — POST /v1/devtools/act   (S-13)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/devtools/act
+  auth: Bearer <Firebase ID Token>
+  authorization: "Same guard. Acts AS a fixture through the REAL services (rules still apply)."
+  owner: M4
+  screen_id: "S-13"
+  stub: "S-13"
+request: "body {fixture, action: connect|respond_connection|link_request|approve_link|end_link|message|reply|request_grant|block, target_user_id?, ref_id?, text?, sport_id?, decision?, scopes?}"
+response: "200 result of the real service call"
+errors: "403/404/409/422 from the real rules"
+collections: "all M4 collections"
+dependencies: "-"
+tests_required: "unverified fixture still cannot start a link"
 
-open_questions:
-  - TODO(confirm) full route list for M4 from v2.1 section 3 (conversations, coach-links, access-grants)
-  - TODO(confirm) /connections/{id}/unblock, /coach-links/{id}/decline, POST /access-grants,
-    athlete-initiated coach link (listed as open items in v3)
+---
+# ------------------------------------------------------------
+# OPEN ITEMS (from v3 section 6) — decided in code, please confirm
+# ------------------------------------------------------------
+open_items:
+  - "POST /connections/{id}/unblock: implemented; only the blocker can unblock; unblock deletes the pair record."
+  - "POST /coach-links/{id}/decline: implemented."
+  - "POST /access-grants: implemented as owner-initiated grant."
+  - "Athlete-initiated coach link: supported (coach must be verified)."
+  - "Verification state source (M5): users.verification_status == 'verified' (or users.verification.status). TODO(confirm)."
+  - "M3 applications lookup: stub no_applications() in messaging/service.py. TODO(M3)."
+  - "Grant scope names and contact_policy options are proposals."
