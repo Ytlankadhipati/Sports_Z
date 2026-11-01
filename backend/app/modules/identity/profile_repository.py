@@ -118,6 +118,28 @@ class ProfileRepository:
         )
 
     @staticmethod
+    def get_user_id_by_sportsz_id(sportsz_id: str) -> str | None:
+        doc = sports_ids_collection.find_one(
+            {"sportsz_id": sportsz_id},
+            {"_id": 0, "user_id": 1},
+        )
+        return doc.get("user_id") if doc else None
+
+    @staticmethod
+    def get_public_profile(user_id: str) -> dict[str, Any] | None:
+        """Only the fields the public ID page can show (no DOB, no contact data)."""
+        return athlete_profiles_collection.find_one(
+            {"user_id": user_id},
+            {
+                "_id": 0,
+                "full_name": 1,
+                "photo_url": 1,
+                "sports": 1,
+                "sport_profiles": 1,
+            },
+        )
+
+    @staticmethod
     def get_sport_by_id(sport_id: str) -> dict[str, Any] | None:
         return sports_collection.find_one(
             {"sport_id": sport_id},
