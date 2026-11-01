@@ -12,6 +12,7 @@ from app.modules.identity import profile_router
 from app.modules.identity import sports_router
 from app.modules.identity import organizations_router
 from app.modules.identity import sportsz_id_router
+from app.modules.identity import public_id_router
 from app.modules.opportunities import router as opportunities_router
 from app.modules.events import router as events_router
 from app.modules.discovery import router as saved_router
@@ -58,6 +59,7 @@ app.include_router(profile_router.router)
 app.include_router(sports_router.router)
 app.include_router(organizations_router.router)
 app.include_router(sportsz_id_router.router)
+app.include_router(public_id_router.router)
 app.include_router(opportunities_router.router)
 app.include_router(events_router.router)
 app.include_router(saved_router.router)
