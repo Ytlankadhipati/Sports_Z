@@ -12,16 +12,28 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-_NAME = "app.modules.identity.firebase_auth_service"
-if _NAME not in sys.modules:
-    _stub = types.ModuleType(_NAME)
-    _stub.verify_firebase_token = lambda t: {"token": "jwt", "user_id": "u1", "role": None}
-    _stub.set_user_role = lambda uid, role: {"token": "jwt2", "user_id": uid, "role": role}
-    _stub.resolve_firebase_user = lambda t: {"user_id": "u1", "firebase_uid": "f1", "role": None}
-    sys.modules[_NAME] = _stub
+_service_name = "app.modules.identity.firebase_auth_service"
+_dependency_name = "app.core.dependencies"
+_previous_service = sys.modules.get(_service_name)
+_previous_dependencies = sys.modules.get(_dependency_name)
+_stub = types.ModuleType(_service_name)
+_stub.verify_firebase_token = lambda t: {"token": "jwt", "user_id": "u1", "role": None}
+_stub.set_user_role = lambda uid, role: {"token": "jwt2", "user_id": uid, "role": role}
+_stub.resolve_firebase_user = lambda t: {"user_id": "u1", "firebase_uid": "f1", "role": None}
+sys.modules[_service_name] = _stub
 
-from app.core.errors import register_error_handlers  # noqa: E402
-from app.modules.identity import me_router  # noqa: E402
+try:
+    from app.core.errors import register_error_handlers  # noqa: E402
+    from app.modules.identity import me_router  # noqa: E402
+finally:
+    if _previous_service is None:
+        sys.modules.pop(_service_name, None)
+    else:
+        sys.modules[_service_name] = _previous_service
+    if _previous_dependencies is None:
+        sys.modules.pop(_dependency_name, None)
+    else:
+        sys.modules[_dependency_name] = _previous_dependencies
 
 # Use the exact function object the route depends on. Importing it from
 # app.core.dependencies can give a different object if another test file stubs

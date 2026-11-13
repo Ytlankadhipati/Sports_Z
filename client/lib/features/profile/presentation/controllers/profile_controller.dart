@@ -82,6 +82,21 @@ class ProfileController extends Notifier<ProfileControllerState> {
     onSuccess: (data) => state = state.copyWith(sportszId: data),
   );
 
+  Future<Map<String, dynamic>> rotateQr() => _run(
+    ref.read(profileRepositoryProvider).rotateQr,
+    onSuccess: (data) {
+      if (state.sportszId != null) {
+        state = state.copyWith(
+          sportszId: {
+            ...state.sportszId!,
+            'qr_token': data['qr_token'],
+            'qr_rotated_at': data['qr_rotated_at'],
+          },
+        );
+      }
+    },
+  );
+
   Future<List<Map<String, dynamic>>> loadSportsCatalog() => _run(() async {
     final data = await ref.read(profileRepositoryProvider).getSportsCatalog();
     final raw = data['sports'];

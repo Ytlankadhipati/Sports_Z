@@ -19,3 +19,16 @@ def get_my_sportsz_id(
         identity.model_dump(mode="json"),
         request_id=getattr(request.state, "request_id", None),
     )
+
+
+@router.post("/rotate-qr")
+def rotate_my_qr(
+    request: Request,
+    current_user: dict = Depends(get_current_athlete),
+):
+    """I03: replace the QR token. Identity comes from the token only."""
+    result = service.rotate_qr(current_user["user_id"])
+    return success_response(
+        result.model_dump(mode="json"),
+        request_id=getattr(request.state, "request_id", None),
+    )

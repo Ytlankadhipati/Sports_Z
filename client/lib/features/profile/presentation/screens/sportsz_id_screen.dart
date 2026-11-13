@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../shared/theme/app_theme.dart';
 import '../../../../core/network/api_exception.dart';
@@ -18,6 +19,7 @@ class SportsZIdScreen extends ConsumerStatefulWidget {
   final SportsZIdentityLoader? loadIdentity;
   final ShareIdCallback? shareText;
   final Future<Uint8List?> Function()? captureCard;
+  final Future<Map<String, dynamic>> Function()? onRotateQr;
   final bool openShareOnLoad;
 
   const SportsZIdScreen({
@@ -25,6 +27,7 @@ class SportsZIdScreen extends ConsumerStatefulWidget {
     this.loadIdentity,
     this.shareText,
     this.captureCard,
+    this.onRotateQr,
     this.openShareOnLoad = false,
   });
 
@@ -34,10 +37,52 @@ class SportsZIdScreen extends ConsumerStatefulWidget {
 
 class _SportsZIdScreenState extends ConsumerState<SportsZIdScreen> {
   bool _loading = true;
+  bool _rotating = false;
   String? _error;
   Map<String, dynamic>? _identity;
   final GlobalKey _cardKey = GlobalKey();
   bool _autoShared = false;
+
+  Future<void> _rotateQr() async {
+    setState(() => _rotating = true);
+    try {
+      final res = await (widget.onRotateQr?.call() ??
+          ref.read(profileControllerProvider.notifier).rotateQr());
+      final data = responseData(res);
+      if (!mounted) return;
+      setState(() {
+        if (_identity != null) {
+          _identity = {
+            ..._identity!,
+            'qr_token': data['qr_token'],
+            'qr_rotated_at': data['qr_rotated_at'],
+          };
+        }
+        _rotating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'QR code refreshed. Previous QR codes are now invalid.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _rotating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            profileRequestError(
+              e,
+              saving: false,
+              fallback: 'Could not rotate QR code.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -209,6 +254,80 @@ class _SportsZIdScreenState extends ConsumerState<SportsZIdScreen> {
                     'SportsZ digital sports credential. Not a government ID.',
                     textAlign: TextAlign.center,
                     style: AppTypography.bodyMedium,
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: QrImageView(
+                            data: (data['qr_token'] as String?)?.isNotEmpty == true
+                                ? data['qr_token'].toString()
+                                : id,
+                            version: QrVersions.auto,
+                            size: 160.0,
+                            eyeStyle: const QrEyeStyle(
+                              eyeShape: QrEyeShape.square,
+                              color: AppColors.deepAccent,
+                            ),
+                            dataModuleStyle: const QrDataModuleStyle(
+                              dataModuleShape: QrDataModuleShape.square,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Scan to verify identity',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(
+                          onPressed: _rotating ? null : _rotateQr,
+                          icon: _rotating
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.gold,
+                                  ),
+                                )
+                              : const Icon(Icons.refresh, size: 18),
+                          label: Text(_rotating ? 'Rotating…' : 'Rotate QR Code'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.gold,
+                            side: const BorderSide(color: AppColors.gold),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

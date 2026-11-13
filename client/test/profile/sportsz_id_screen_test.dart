@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:sports_z/core/network/api_exception.dart';
 import 'package:sports_z/features/profile/presentation/screens/my_profile_screen.dart';
 import 'package:sports_z/features/profile/presentation/screens/sportsz_id_screen.dart';
@@ -142,5 +143,44 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('SZ-4K7M-91Q2-7'), findsOneWidget);
+  });
+
+  testWidgets('I03 renders QR code and tap on Rotate QR refreshes the token', (
+    tester,
+  ) async {
+    var rotateCalled = false;
+    await tester.pumpWidget(
+      _app(
+        SportsZIdScreen(
+          loadIdentity: () async => _identityResponse(),
+          onRotateQr: () async {
+            rotateCalled = true;
+            return {
+              'data': {
+                'sportsz_id': 'SZ-4K7M-91Q2-7',
+                'qr_token': 'new-qr-token-xyz123',
+                'qr_rotated_at': DateTime.now().toIso8601String(),
+              },
+            };
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Scan to verify identity'), findsOneWidget);
+    expect(find.text('Rotate QR Code'), findsOneWidget);
+    expect(find.byType(QrImageView), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Rotate QR Code'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rotate QR Code'));
+    await tester.pumpAndSettle();
+
+    expect(rotateCalled, isTrue);
+    expect(
+      find.text('QR code refreshed. Previous QR codes are now invalid.'),
+      findsOneWidget,
+    );
   });
 }

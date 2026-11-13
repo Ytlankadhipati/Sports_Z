@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pymongo.collation import Collation
@@ -115,6 +116,20 @@ class ProfileRepository:
                 "_id": 0,
                 "sportsz_id": 1,
             },
+        )
+
+    @staticmethod
+    def rotate_qr_token(
+        user_id: str, qr_token: str, rotated_at: datetime
+    ) -> dict[str, Any] | None:
+        """Replace the QR token of an issued SportsZ ID. The old token is gone."""
+        from pymongo import ReturnDocument
+
+        return sports_ids_collection.find_one_and_update(
+            {"user_id": user_id, "sportsz_id": {"$type": "string"}},
+            {"$set": {"qr_token": qr_token, "qr_rotated_at": rotated_at}},
+            projection={"_id": 0, "sportsz_id": 1},
+            return_document=ReturnDocument.AFTER,
         )
 
     @staticmethod
