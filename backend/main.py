@@ -70,7 +70,8 @@ app.include_router(events_router.router)
 app.include_router(saved_router.router)
 app.include_router(relationships_router.router)
 app.include_router(messaging_router.router)
-app.include_router(devtools_router.router)  # 404 unless DEV_TOOLS_ENABLED=true
+if devtools_router.dev_tools_enabled():
+    app.include_router(devtools_router.router)
 
 
 @app.get("/")

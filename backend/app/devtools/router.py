@@ -21,12 +21,24 @@ from app.modules.relationships.errors import DomainError, ValidationFailed, to_h
 
 
 def dev_tools_enabled() -> bool:
+    env = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+    if env in ("production", "prod"):
+        return False
     return os.getenv("DEV_TOOLS_ENABLED", "").lower() == "true"
 
 
-def require_dev_tools() -> None:
+def require_dev_tools(*args: Any, **kwargs: Any) -> None:
     if not dev_tools_enabled():
         raise not_found()
+    expected_secret = os.getenv("DEV_TOOLS_SECRET")
+    if expected_secret:
+        request = kwargs.get("request")
+        if not request and args and isinstance(args[0], Request):
+            request = args[0]
+        if request is not None:
+            client_secret = request.headers.get("X-Dev-Secret")
+            if not client_secret or client_secret != expected_secret:
+                raise not_found()
 
 
 router = APIRouter(prefix="/v1/devtools", tags=["M4 - Dev tools"], dependencies=[Depends(require_dev_tools)])
@@ -56,11 +68,17 @@ def _viewer(c: M4Container, users, name: str) -> ViewerContext:
                          recruiter_verified=verified and role == "recruiter")
 
 
+def _need(val: Any, name: str) -> Any:
+    if not val:
+        raise ValidationFailed(f"{name} is required")
+    return val
+
+
 def perform(c: M4Container, users, req: ActRequest) -> Any:
     if req.fixture not in FIXTURES:
         raise ValidationFailed(f"Unknown fixture. Use one of: {', '.join(FIXTURES)}")
     v = _viewer(c, users, req.fixture)
-    need = lambda x, n: x or (_ for _ in ()).throw(ValidationFailed(f"{n} is required"))  # noqa: E731
+    need = _need
     a = req.action
     if a == "connect":
         return c.connections.request(v, need(req.target_user_id, "target_user_id"), req.text)

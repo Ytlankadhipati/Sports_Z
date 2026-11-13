@@ -142,7 +142,13 @@ class ConnectionService:
                 "requester_id": viewer.user_id, "target_id": target_id,
                 "status": "requested", "note": note})
             return self._view(self.repo.get(existing["id"]), viewer.user_id)
-        return self._view(self.repo.insert(viewer.user_id, target_id, note), viewer.user_id)
+        try:
+            inserted = self.repo.insert(viewer.user_id, target_id, note)
+        except Exception as e:
+            if "duplicate" in str(e).lower() or "E11000" in str(e):
+                raise ConflictError("A connection already exists")
+            raise
+        return self._view(inserted, viewer.user_id)
 
     def respond(self, viewer: ViewerContext, conn_id: str, decision: str) -> dict[str, Any]:
         _check_role(viewer)
@@ -190,9 +196,6 @@ class ConnectionService:
              after_id: str | None):
         _check_role(viewer)
         docs = self.repo.list_for_user(viewer.user_id, statuses, limit + 1, after_id)
-        # a user blocked BY someone else must not learn about it
-        docs = [d for d in docs
-                if not (d["status"] == "blocked" and viewer.user_id not in d.get("blocked_by", []))]
         nxt = docs[limit - 1]["id"] if len(docs) > limit else None
         return [self._view(d, viewer.user_id) for d in docs[:limit]], nxt
 

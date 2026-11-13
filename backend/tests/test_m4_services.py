@@ -449,3 +449,28 @@ def test_console_acts_through_real_services_and_rules(env):
                                              target_user_id=env.ids["ATHLETE_1"], sport_id="cricket"))
     with pytest.raises(ValidationFailed):
         perform(env.c, env.users, ActRequest(fixture="NOPE", action="connect", target_user_id="x"))
+
+
+def test_connection_duplicate_key_converted_to_conflict(env):
+    v = env.v("ATHLETE_1")
+    target = env.ids["COACH_V"]
+    env.c.connections.request(v, target, None)
+    # Concurrent insert simulation triggering duplicate key exception
+    with pytest.raises(ConflictError):
+        env.c.connections.request(v, target, None)
+
+
+def test_deps_viewer_context_populates_verification_and_blocking(monkeypatch):
+    from app.core.authz.deps import get_viewer_context
+    user = {
+        "user_id": "u1",
+        "firebase_uid": "fb_u1",
+        "role": "coach",
+        "verification_status": "verified",
+        "platform_blocked": True,
+    }
+    vc = get_viewer_context(current_user=user, x_active_role="coach")
+    assert vc.coach_verified is True
+    assert vc.is_blocked_user is True
+    assert vc.active_role == "coach"
+

@@ -39,17 +39,24 @@ class _CoachLinksScreenState extends ConsumerState<CoachLinksScreen> {
     final send = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Request a coach link'),
+        title: const Text('Request Coach Link'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: coachId,
-              decoration: const InputDecoration(labelText: 'User ID'),
+              decoration: const InputDecoration(
+                labelText: 'Coach SportsZ ID',
+                hintText: 'Enter coach SportsZ ID or user ID',
+              ),
             ),
+            const SizedBox(height: 12),
             TextField(
               controller: sportId,
-              decoration: const InputDecoration(labelText: 'Sport ID'),
+              decoration: const InputDecoration(
+                labelText: 'Sport',
+                hintText: 'e.g. Cricket, Football, Badminton',
+              ),
             ),
           ],
         ),
@@ -58,9 +65,13 @@ class _CoachLinksScreenState extends ConsumerState<CoachLinksScreen> {
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Send'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Send Request'),
           ),
         ],
       ),
@@ -71,7 +82,7 @@ class _CoachLinksScreenState extends ConsumerState<CoachLinksScreen> {
     sportId.dispose();
     if (send != true || !mounted) return;
     if (counterpart.isEmpty || sport.isEmpty) {
-      m4Snack(context, 'User ID and sport are required.');
+      m4Snack(context, 'Coach ID and sport are required.');
       return;
     }
     final ok = await m4Run(

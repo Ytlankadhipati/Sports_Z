@@ -87,7 +87,10 @@ class ConnectionRepository(_Base):
         })
 
     def list_for_user(self, user_id: str, statuses: list[str] | None, limit: int, after_id: str | None):
-        q: dict[str, Any] = {"participants": user_id}
+        q: dict[str, Any] = {
+            "participants": user_id,
+            "$nor": [{"status": "blocked", "blocked_by": {"$ne": user_id}}],
+        }
         if statuses:
             q["status"] = {"$in": statuses}
         return self._page(q, limit, after_id)
@@ -114,7 +117,10 @@ class CoachLinkRepository(_Base):
         })
 
     def list_for_user(self, user_id: str, statuses: list[str] | None, limit: int, after_id: str | None):
-        q: dict[str, Any] = {"participants": user_id}
+        q: dict[str, Any] = {
+            "participants": user_id,
+            "$nor": [{"status": "blocked", "blocked_by": {"$ne": user_id}}],
+        }
         if statuses:
             q["status"] = {"$in": statuses}
         return self._page(q, limit, after_id)

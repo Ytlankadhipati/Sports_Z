@@ -23,16 +23,26 @@ class M4Page extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: m4Bottom,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final bgGradient = isLight
+        ? const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.lightGold, Colors.white],
+          )
+        : const LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [AppColors.mustard900, m4Bottom],
-          ),
-        ),
+          );
+    final titleColor = isLight ? AppColors.deepAccent : Colors.white;
+    final backIconColor = isLight ? AppColors.deepAccent : Colors.white;
+    final subtitleColor = isLight ? AppColors.textSecondary : Colors.white60;
+
+    return Scaffold(
+      backgroundColor: isLight ? Colors.white : m4Bottom,
+      body: Container(
+        decoration: BoxDecoration(gradient: bgGradient),
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -43,15 +53,15 @@ class M4Page extends StatelessWidget {
                   children: [
                     IconButton(
                       onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      icon: Icon(Icons.arrow_back, color: backIconColor),
                     ),
                     Expanded(
                       child: Text(
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: titleColor,
                           fontSize: 24,
                           fontWeight: FontWeight.w800,
                         ),
@@ -66,7 +76,7 @@ class M4Page extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   child: Text(
                     subtitle!,
-                    style: const TextStyle(color: Colors.white60, fontSize: 14),
+                    style: TextStyle(color: subtitleColor, fontSize: 14),
                   ),
                 ),
               Expanded(child: child),
@@ -113,18 +123,22 @@ class M4Message extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: Colors.white38, size: 44),
+            Icon(icon, color: isLight ? AppColors.textMuted : Colors.white38, size: 44),
             const SizedBox(height: 12),
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 15),
+              style: TextStyle(
+                color: isLight ? AppColors.textSecondary : Colors.white70,
+                fontSize: 15,
+              ),
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 16),
@@ -151,11 +165,17 @@ class M4Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Material(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(16),
+        color: isLight ? AppColors.surface : Colors.white.withValues(alpha: 0.06),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: isLight
+              ? const BorderSide(color: AppColors.border, width: 1)
+              : BorderSide.none,
+        ),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: onTap,

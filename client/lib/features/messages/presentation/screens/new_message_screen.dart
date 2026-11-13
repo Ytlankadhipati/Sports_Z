@@ -69,7 +69,7 @@ class _NewMessageScreenState extends ConsumerState<NewMessageScreen> {
             TextField(
               controller: _manualId,
               style: const TextStyle(color: Colors.white),
-              decoration: m4Input('User ID (dev)'),
+              decoration: m4Input('Recipient SportsZ ID', hint: 'Enter recipient SportsZ ID or user ID'),
             ),
             const SizedBox(height: 14),
           ],
