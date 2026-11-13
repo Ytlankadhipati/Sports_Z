@@ -185,5 +185,8 @@ def resolve_firebase_user(id_token: str) -> dict:
         "user_id": str(user["_id"]),
         "firebase_uid": firebase_uid,
         "role": user.get("role"),
+        "roles": user.get("roles") or ([user.get("role")] if user.get("role") else []),
+        "platform_blocked": bool(user.get("platform_blocked") or user.get("is_blocked")),
+        "verification_status": user.get("verification_status"),
         "claims": claims,
     }

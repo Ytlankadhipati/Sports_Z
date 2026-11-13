@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../shared/theme/app_theme.dart';
+import '../../../privacy_access/presentation/screens/privacy_center_screen.dart';
 import '../controllers/account_controller.dart';
 
 /// ST02 — Account information.
@@ -246,6 +247,44 @@ class _AccountContent extends StatelessWidget {
                           rows[i],
                         ],
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PrivacyCenterScreen(),
+                        ),
+                      );
+                    },
+                    child: const _Card(
+                      child: Row(
+                        children: [
+                          _IconBadge(icon: Icons.lock_outline),
+                          SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Privacy Center', style: AppTypography.h4),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Profile visibility and discoverability',
+                                  style: AppTypography.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: AppColors.textMuted,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
