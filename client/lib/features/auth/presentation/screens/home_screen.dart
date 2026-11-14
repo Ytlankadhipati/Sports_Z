@@ -10,6 +10,8 @@ import '../widgets/logout_dialog.dart';
 import 'link_accounts_screen.dart';
 import 'session_expired_screen.dart';
 import '../../../account/presentation/screens/account_screen.dart';
+import '../../../m4_common/m4_hub_screen.dart';
+import '../../../messages/presentation/screens/conversations_screen.dart';
 import '../../../onboarding/presentation/screens/athlete_identity_screen.dart';
 import '../../../profile/presentation/controllers/profile_controller.dart';
 import '../../../profile/presentation/screens/my_profile_screen.dart';
@@ -283,6 +285,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         centerTitle: false,
         actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.chat_bubble_outline,
+              color: AppColors.textPrimary,
+              size: 22,
+            ),
+            tooltip: 'Messages',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ConversationsScreen(),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(
               Icons.notifications_none,
@@ -673,6 +691,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const AccountScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            Container(
+              decoration: _cardDeco(),
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: AppColors.lightGold,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.hub_outlined,
+                    color: AppColors.gold,
+                    size: 20,
+                  ),
+                ),
+                title: const Text(
+                  'Network & Privacy',
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Connections, coach links, messages & privacy',
+                  style: TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: AppColors.textMuted,
+                  size: 14,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const M4HubScreen(),
                     ),
                   );
                 },
