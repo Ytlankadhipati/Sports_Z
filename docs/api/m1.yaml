@@ -30,6 +30,8 @@ description: >
   Email and phone are returned MASKED by the server (e.g. r•••@example.com,
   +91 98••• ••210); the full values are never sent. (Masking is a proposal;
   the prototype only shows masked values.)
+  phone_verified is derived from the presence of the phone_number token claim;
+  claims can be about 1 hour stale until refreshed by the client.
   Path /me is shared with M2's DELETE /me. M1 owns GET (and later PATCH) in its
   own router file (me_router.py); M2 owns DELETE in a separate router file.
 
@@ -49,7 +51,9 @@ response:
       email_masked: { type: string, nullable: true }
       email_verified: { type: boolean }
       phone_masked: { type: string, nullable: true }
-      phone_verified: { type: boolean }
+      phone_verified:
+        type: boolean
+        description: "derived from the presence of the phone_number token claim; claims can be about 1 hour stale"
       linked_providers:
         type: array
         description: "ST02 'Google: Linked' row; A08. Firebase identity keys that are linked; absent = not linked."
@@ -78,6 +82,41 @@ tests_required:
 open_questions:
   - Email/Phone/Google rows on ST02 show a chevron (>) in the prototype, meaning a detail/manage
     screen. No such screen is in the 38 M1 screens. Confirm if rows are tappable in Phase 1.
+---
+# ------------------------------------------------------------
+# CONTRACT 1B — POST /v1/auth/logout   (A07, X01)
+# ------------------------------------------------------------
+contract:
+  method: POST
+  endpoint: /v1/auth/logout
+  auth: Bearer <Firebase ID Token>
+  authorization: Authenticated user. Identity comes from the token only.
+  owner: M1 (Identity, Profile & Account)
+  screen_id: A07, X01
+
+description: >
+  Stateless 204 acknowledgement (no server session is revoked). The backend
+  is stateless and maintains no server-side session store; client performs
+  Firebase signOut and clears its local token/cache upon receiving 204.
+
+request:
+  headers:
+    Authorization: { type: string, required: true }
+  body: none
+
+response:
+  status_code: 204
+  body: none
+
+errors:
+  401_unauthorized: { code: AUTH_REQUIRED, message: "Authentication required" }
+  500_internal_server_error: { code: INTERNAL_SERVER_ERROR, message: "An internal server error occurred" }
+
+collections:
+  primary: none
+
+dependencies:
+  - Firebase Admin token verification
 ---
 # ------------------------------------------------------------
 # CONTRACT 2 — PATCH /v1/me   (ST02 Account)   *** DEFERRED ***
@@ -211,9 +250,11 @@ contract:
   screen_id: I04
 
 description: >
-  Public SportsZ ID page. Returns ONLY whitelisted fields, and each optional
-  field only if the owner's ID-page setting (I04) allows it. The sportsz_id
-  format and check character are validated BEFORE any database lookup.
+  Public SportsZ ID page. Returns exactly 5 whitelisted fields (sportsz_id,
+  full_name, photo_url, primary_sport, playing_role). Only the SZ-XXXX-XXXX
+  format (alphabet ABCDEFGHJKLMNPQRSTUVWXYZ23456789; no check character) is
+  validated before any database lookup. Malformed or unknown IDs return an
+  identical 404 response.
 
 request:
   path_parameters:
@@ -223,17 +264,12 @@ request:
 
 response:
   envelope:
-    data:                                   # WHITELIST: nothing outside this list is ever returned
+    data:                                   # WHITELIST: exactly these 5 fields are returned
       sportsz_id: { type: string }
-      # From the I04 prototype ("Visible information"): Full name, Primary sport,
-      # Playing role, Age category, Verification status. Plus photo toggle.
-      # Each field is returned only if the owner's I04 setting allows it.
       full_name: { type: string, nullable: true }
-      photo_url: { type: string, nullable: true }       # "Show profile photo" toggle
+      photo_url: { type: string, nullable: true }
       primary_sport: { type: string, nullable: true }   # sport_name of is_primary sport
-      playing_role: { type: string, nullable: true }    # TODO(confirm) maps to sports[].positions
-      age_category: { type: string, nullable: true }    # category only, NEVER date_of_birth; hidden by default in prototype
-      verified: { type: boolean }                       # badge only, no documents or details
+      playing_role: { type: string, nullable: true }    # joined positions of primary sport
     meta: { request_id: { type: string, nullable: true } }
 
 errors:
@@ -254,9 +290,9 @@ dependencies:
   - M4: rate limiting
 
 tests_required:
-  - snapshot test of the exact response keys (fails if any key is added)
+  - snapshot test of the exact response keys (asserts exactly 5 keys: sportsz_id, full_name, photo_url, primary_sport, playing_role)
   - enumeration test: unknown id and disabled page return identical status and body shape
-  - check-character test: malformed id is rejected without a DB query
+  - format validation test: malformed id is rejected without a DB query (no check character)
   - never returns: date_of_birth, phone, email, roles, status, verification_*, search.*, documents
 
 ---
