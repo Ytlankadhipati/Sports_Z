@@ -1,6 +1,12 @@
+import secrets
+from datetime import datetime, timezone
+
 from app.core.errors import not_found
 from app.modules.identity.profile_repository import ProfileRepository
-from app.modules.identity.sportsz_id_schema import SportsZIdentityResponse
+from app.modules.identity.sportsz_id_schema import (
+    QrRotateResponse,
+    SportsZIdentityResponse,
+)
 
 
 class SportsZIdService:
@@ -36,4 +42,19 @@ class SportsZIdService:
             primary_sport=sport_name,
             positions=list(primary.get("positions", [])) if primary else [],
             level=primary.get("level") if primary else None,
+            qr_token=sports_id.get("qr_token"),
+            qr_rotated_at=sports_id.get("qr_rotated_at"),
+        )
+
+    def rotate_qr(self, user_id: str) -> QrRotateResponse:
+        """Issue a fresh QR token. The sportsz_id itself never changes."""
+        qr_token = secrets.token_urlsafe(24)
+        rotated_at = datetime.now(timezone.utc)
+        updated = self.repository.rotate_qr_token(user_id, qr_token, rotated_at)
+        if not updated or not updated.get("sportsz_id"):
+            raise not_found("SportsZ ID has not been issued yet")
+        return QrRotateResponse(
+            sportsz_id=updated["sportsz_id"],
+            qr_token=qr_token,
+            qr_rotated_at=rotated_at,
         )

@@ -10,6 +10,9 @@ class ProfileRepository {
 
   Future<Map<String, dynamic>> getSportszId() => _getMap('/me/sportsz-id');
 
+  Future<Map<String, dynamic>> rotateQr() =>
+      _postMap('/me/sportsz-id/rotate-qr', const {});
+
   Future<Map<String, dynamic>> getSportsCatalog() => _getMap('/sports');
 
   Future<Map<String, dynamic>> getSportConfig(String sportId) =>
