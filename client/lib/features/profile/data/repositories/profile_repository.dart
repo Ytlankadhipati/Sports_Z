@@ -29,9 +29,6 @@ class ProfileRepository {
     Map<String, dynamic> payload,
   ) => _putMap('/me/profile/athlete/sports/$sportId', payload);
 
-  Future<Map<String, dynamic>> addSport(Map<String, dynamic> payload) =>
-      _postMap('/me/profile/athlete/sports', payload);
-
   Future<Map<String, dynamic>> setPrimarySport(String sportId) =>
       _postMap('/me/profile/athlete/sports/$sportId/primary', const {});
 

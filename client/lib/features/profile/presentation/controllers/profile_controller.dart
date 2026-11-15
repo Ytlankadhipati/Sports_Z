@@ -129,11 +129,6 @@ class ProfileController extends Notifier<ProfileControllerState> {
     saving: true,
   );
 
-  Future<Map<String, dynamic>> addSport(Map<String, dynamic> payload) => _run(
-    () => ref.read(profileRepositoryProvider).addSport(payload),
-    saving: true,
-  );
-
   Future<Map<String, dynamic>> setPrimarySport(String sportId) => _run(
     () => ref.read(profileRepositoryProvider).setPrimarySport(sportId),
     saving: true,
