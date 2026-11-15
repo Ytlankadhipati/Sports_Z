@@ -7,6 +7,7 @@ from firebase_admin import auth as firebase_auth
 from firebase_admin import credentials
 
 from app.core.database import users_collection
+from app.core.errors import unauthorized
 from app.core.security import create_access_token
 
 
@@ -52,10 +53,7 @@ def verify_firebase_token(id_token: str) -> dict:
     email = decoded_token.get("email")
 
     if not firebase_uid:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token me UID nahi mila",
-        )
+        raise unauthorized("Firebase UID not found in token")
 
     # MongoDB me existing user check karo
     user = users_collection.find_one(
