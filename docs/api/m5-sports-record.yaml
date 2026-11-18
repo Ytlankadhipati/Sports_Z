@@ -1,0 +1,72 @@
+openapi: 3.1.0
+info:
+  title: SportsZ M5 Sports Record, Evidence & Verification
+  version: 1.0.0
+servers:
+  - url: /v1
+security:
+  - FirebaseBearer: []
+components:
+  securitySchemes:
+    FirebaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
+  schemas:
+    Envelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta:
+          type: object
+          properties:
+            next_cursor: {type: [string, 'null']}
+            request_id: {type: string}
+paths:
+  /me/performance:
+    get:
+      summary: List current athlete performance records
+      parameters:
+        - in: query
+          name: metric_key
+          schema: {type: string}
+      responses: {'200': {description: Performance records}}
+  /performance:
+    post:
+      summary: Create performance record; source and verification are server-owned
+      responses: {'201': {description: Created}}
+  /performance/{public_id}:
+    get: {summary: Get own performance record, responses: {'200': {description: Record}}}
+    patch: {summary: Edit own unverified record; resets endorsement and verification, responses: {'200': {description: Updated}}}
+    delete: {summary: Delete own unverified record, responses: {'204': {description: Deleted}}}
+  /me/metric-bests:
+    get: {summary: M5 metric bests read service for M3, responses: {'200': {description: Metric bests}}}
+  /me/achievements:
+    get: {summary: List achievements, responses: {'200': {description: Achievements}}}
+  /achievements:
+    post: {summary: Create achievement, responses: {'201': {description: Created}}}
+  /achievements/{public_id}:
+    get: {summary: Get own achievement, responses: {'200': {description: Achievement}}}
+    patch: {summary: Update own achievement, responses: {'200': {description: Updated}}}
+    delete: {summary: Delete own unverified achievement, responses: {'204': {description: Deleted}}}
+  /media/upload-url:
+    post: {summary: Create media upload intent, responses: {'201': {description: Upload URL}}}
+  /media/{upload_id}/confirm:
+    post: {summary: Confirm media upload, responses: {'200': {description: Confirmed}}}
+  /me/media:
+    get: {summary: List own media, responses: {'200': {description: Media}}}
+  /documents/upload-url:
+    post: {summary: Create document upload intent, responses: {'201': {description: Upload URL}}}
+  /documents/{upload_id}/confirm:
+    post: {summary: Confirm document upload, responses: {'200': {description: Confirmed}}}
+  /me/documents:
+    get: {summary: List own documents, responses: {'200': {description: Documents}}}
+  /verification:
+    post: {summary: Submit verification request, one open request per user/domain, responses: {'201': {description: Request}}}
+  /me/verification:
+    get: {summary: List own verification requests, responses: {'200': {description: Requests}}}
+  /me/verification/{public_id}/resubmit:
+    post: {summary: Resubmit needs_info or rejected request, responses: {'200': {description: Resubmitted}}}
+  /admin/verification/{public_id}/decide:
+    post: {summary: Admin decision; verified records are immutable, responses: {'200': {description: Decision}}}
